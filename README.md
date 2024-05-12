@@ -1,3 +1,6 @@
+# This fork
+This fork migrates the whole project to platform.io so you can build it without wasting half a day. I didn't reorganize files, just migrated the project, added libraries, fixed build errors and voila.
+
 # OnStep Smart Hand Controller
 The SHC adds dedicated hand controller functionality to an OnStep or OnStepX telescope controller. 
 This firmware is designed to run on ESP32 (recommended) or Teensy3.2 or Teensy4.0 hardware.
