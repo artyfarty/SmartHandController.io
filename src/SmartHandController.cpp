@@ -34,15 +34,6 @@
 
 #include <Arduino.h>
 
-#include <Calendar.hpp>
-#include <Ephemeris.h>
-#include <Ephemeris.hpp>
-
-
-#include <U8g2lib.h>
-#include <U8x8lib.h>
-#include <MUIU8g2.h>
-
 #include "src/Common.h"
 NVS nv;
 #include "src/lib/tasks/OnTask.h"
