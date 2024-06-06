@@ -46,3 +46,13 @@
   #define STA3_PASSWORD          ONSTEP3_PASSWORD
   #define STA3_TARGET_IP_ADDR    ONSTEP3_IP_ADDR
 #endif
+
+#ifndef ENCODER_SLEW_CONTROL
+    #define ENCODER_SLEW_CONTROL OFF
+#endif
+#ifndef SLEW_ENCODER_DIR
+    #define SLEW_ENCODER_DIR 1
+#endif
+#ifndef SLEW_ENCODER_TYPE
+    #define SLEW_ENCODER_TYPE AB
+#endif
