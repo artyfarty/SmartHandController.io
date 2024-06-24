@@ -9,6 +9,11 @@ extern NVS nv;
 #include "../libApp/st4Aux/St4Aux.h"
 #include "../catalogs/Catalog.h"
 #include "bitmaps/Bitmaps.h"
+#include "src/lib/convert/Convert.h"
+
+#if ENCODER_SLEW_CONTROL == ON
+#include "src/libApp/encoders/Encoders.h"
+#endif
 
 bool xBusy = false;
 
@@ -78,6 +83,10 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
       analogWrite(UTILITY_LIGHT_PIN, UTILITY_LIGHT);
     #endif
   #endif
+
+  #if ENCODER_SLEW_CONTROL == ON
+    encoders.init(this);
+  #endif
   
   //choose a 128x64 display supported by U8G2lib (if not listed below there are many many others in u8g2 library example Sketches)
   delay(500);
@@ -118,10 +127,49 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
     strcpy(ccQw, ":Qw#");
     strcpy(ccQn, ":Qn#");
     strcpy(ccQs, ":Qs#");
+    strcpy(ccQ,  ":Q#");
   }
 
   VF("MSG: UserInterface, start UI update task (rate 30ms priority 6)... ");
   if (tasks.add(30, 0, true, 6, updateWrapper, "UIupd")) { VLF("success"); } else { VLF("FAILED!"); }
+}
+
+void UI::guide(short dir) {
+    if (dir == SLEW_DIR_EAST) {
+        SERIAL_ONSTEP.write(ccMe);
+        //VF("MSG: UserInterface guide E");
+    } else if (dir == SLEW_DIR_WEST) {
+        SERIAL_ONSTEP.write(ccMw);
+        //VF("MSG: UserInterface guide W");
+    } else if (dir == SLEW_DIR_NORTH) {
+        SERIAL_ONSTEP.write(ccMn);
+    } else if (dir == SLEW_DIR_SOUTH) {
+        SERIAL_ONSTEP.write(ccMs);
+    } else if (dir == SLEW_STOP) {
+        SERIAL_ONSTEP.write(ccQ);
+        //VF("MSG: UserInterface guide STOP");
+    }
+    SERIAL_ONSTEP.flush();
+}
+
+uint8_t UI::getGuideRate() {
+    return activeGuideRate;
+}
+
+CMD_RESULT UI::setGuideRate(uint8_t newGuideRate) {
+    activeGuideRate = newGuideRate;
+    if (activeGuideRate < 4)  activeGuideRate = 4;
+    if (activeGuideRate > 10) activeGuideRate = 10;
+    char cmd[5] = ":Rn#"; cmd[2] = '0' + activeGuideRate - 1;
+    return onStep.Set(cmd);
+}
+
+void UI::setCustomGuideRate(float newGuideRate) { // :RA[n.n]#
+    char cmd[40];
+    sprintF(cmd, ":RA%1.3f#", newGuideRate);
+    SERIAL_ONSTEP.write(cmd);
+    sprintF(cmd, ":RE%1.3f#", newGuideRate);
+    SERIAL_ONSTEP.write(cmd);
 }
 
 void UI::poll() {
@@ -234,14 +282,14 @@ void UI::poll() {
       if (!moveSouth && (keyPad.s->isDown() || auxST4.s->isDown())) { moveSouth = true;  SERIAL_ONSTEP.write(ccMs); buttonCommand = true; } else
       if ( moveSouth && (keyPad.s->isUp()   && auxST4.s->isUp()))   { moveSouth = false; SERIAL_ONSTEP.write(ccQs); buttonCommand = true; keyPad.s->clearPress(); auxST4.s->clearPress(); }
     #else
-      if (!moveEast  && (keyPad.e->isDown())) { moveEast = true;   SERIAL_ONSTEP.write(ccMe); buttonCommand = true; } else
+      /*if (!moveEast  && (keyPad.e->isDown())) { moveEast = true;   SERIAL_ONSTEP.write(ccMe); buttonCommand = true; } else
       if ( moveEast  && (keyPad.e->isUp()  )) { moveEast = false;  SERIAL_ONSTEP.write(ccQe); buttonCommand = true; keyPad.e->clearPress(); }
       if (!moveWest  && (keyPad.w->isDown())) { moveWest = true;   SERIAL_ONSTEP.write(ccMw); buttonCommand = true; } else
       if ( moveWest  && (keyPad.w->isUp()  )) { moveWest = false;  SERIAL_ONSTEP.write(ccQw); buttonCommand = true; keyPad.w->clearPress(); }
       if (!moveNorth && (keyPad.n->isDown())) { moveNorth = true;  SERIAL_ONSTEP.write(ccMn); buttonCommand = true; } else
       if ( moveNorth && (keyPad.n->isUp()  )) { moveNorth = false; SERIAL_ONSTEP.write(ccQn); buttonCommand = true; keyPad.n->clearPress(); }
       if (!moveSouth && (keyPad.s->isDown())) { moveSouth = true;  SERIAL_ONSTEP.write(ccMs); buttonCommand = true; } else
-      if ( moveSouth && (keyPad.s->isUp()  )) { moveSouth = false; SERIAL_ONSTEP.write(ccQs); buttonCommand = true; keyPad.s->clearPress(); }
+      if ( moveSouth && (keyPad.s->isUp()  )) { moveSouth = false; SERIAL_ONSTEP.write(ccQs); buttonCommand = true; keyPad.s->clearPress(); }*/
     #endif
     if (buttonCommand) { time_last_action = millis(); return; }
   }

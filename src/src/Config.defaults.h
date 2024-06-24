@@ -56,3 +56,6 @@
 #ifndef SLEW_ENCODER_TYPE
     #define SLEW_ENCODER_TYPE AB
 #endif
+#ifndef SLEW_ENCODER_MULT
+    #define SLEW_ENCODER_MULT 1
+#endif

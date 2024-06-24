@@ -21,6 +21,12 @@
 #define onstep_logo_width 128
 #define onstep_logo_height 68
 
+#define SLEW_DIR_EAST       5
+#define SLEW_DIR_WEST       -5
+#define SLEW_DIR_NORTH      10
+#define SLEW_DIR_SOUTH      -10
+#define SLEW_STOP           0
+
 enum OLED { OLED_SH1106, OLED_SH1106_4W_SW_SPI, OLED_SH1106_4W_HW_SPI, OLED_SSD1306, OLED_SSD1309, OLED_SSD1309_4W_SW_SPI, OLED_SSD1309_4W_HW_SPI };
 #define SH1106 OLED_SH1106
 #define SH1106_SW_SPI OLED_SH1106_4W_SW_SPI
@@ -59,6 +65,11 @@ public:
   #else
     boolean hrs24 = false;
   #endif
+
+  CMD_RESULT setGuideRate(uint8_t newGuideRate);
+  void setCustomGuideRate(float newGuideRate);
+  uint8_t getGuideRate();
+  void guide(short dir);
 
 private:
   void updateMainDisplay(u8g2_uint_t page);
@@ -153,6 +164,7 @@ private:
   char ccQw[5];
   char ccQn[5];
   char ccQs[5];
+  char ccQ[5];
 
   unsigned long lastpageupdate = millis();
   unsigned long time_last_action = millis();

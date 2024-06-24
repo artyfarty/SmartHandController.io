@@ -80,8 +80,8 @@
     #define DISPLAY_SCK_PIN    -1  // SPI display clock pin for (ignored for hardware SPI connections)
   #endif
 
-  #ifdef ENCODER_SLEW_CONTROL
-    #define SLEW_ENCODER_A_PIN 5
-    #define SLEW_ENCODER_A_PIN 18
+  #if ENCODER_SLEW_CONTROL == ON
+    #define SLEW_ENCODER_A_PIN 26
+    #define SLEW_ENCODER_B_PIN 27
   #endif
 #endif
