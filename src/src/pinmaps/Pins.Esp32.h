@@ -81,7 +81,7 @@
   #endif
 
   #ifdef ENCODER_SLEW_CONTROL
-    #define SLEW_ENCODER_A_PIN -1
-    #define SLEW_ENCODER_A_PIN -1
+    #define SLEW_ENCODER_A_PIN 5
+    #define SLEW_ENCODER_A_PIN 18
   #endif
 #endif
