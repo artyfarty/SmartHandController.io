@@ -26,9 +26,7 @@ class Encoders {
 
     u_short extraTicks = ENCODER_PREV_POSITIONS;
     long prevPos;
-    long prevDiff1;
-    long prevDiff2;
-    long prevDiff3;
+    long posDiff;
 
     double prevSpd1;
     double prevSpd2;

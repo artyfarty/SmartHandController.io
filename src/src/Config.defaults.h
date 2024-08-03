@@ -50,6 +50,9 @@
 #ifndef ENCODER_SLEW_CONTROL
     #define ENCODER_SLEW_CONTROL OFF
 #endif
+#ifndef ENCODER_CONTROL_MODE
+    #define ENCODER_CONTROL_MODE EC_POS
+#endif
 #ifndef SLEW_ENCODER_DIR
     #define SLEW_ENCODER_DIR 1
 #endif

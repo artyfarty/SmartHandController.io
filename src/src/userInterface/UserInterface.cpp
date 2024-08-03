@@ -172,6 +172,14 @@ void UI::setCustomGuideRate(float newGuideRate) { // :RA[n.n]#
     SERIAL_ONSTEP.write(cmd);
 }
 
+void UI::focusPull(long diff) {
+    char cmd[40];
+    sprintf(cmd, ":FR%ld", diff);
+    // // :FR[sn]#   Goto focuser target position relative (in microns or steps)
+    SERIAL_ONSTEP.write(cmd);
+}
+
+
 void UI::poll() {
   // -----------------------------------------------------------------------------------------------------
   // connect/reconnect

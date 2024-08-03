@@ -70,6 +70,7 @@ public:
   void setCustomGuideRate(float newGuideRate);
   uint8_t getGuideRate();
   void guide(short dir);
+  void focusPull(long diff);
 
 private:
   void updateMainDisplay(u8g2_uint_t page);

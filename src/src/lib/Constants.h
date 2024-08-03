@@ -27,6 +27,9 @@
 #define KALMAN                      -22
 #define INVALID                     -127
 
+#define EC_POS                      1
+#define EC_SPD                      2
+
 // driver (step/dir interface, usually for stepper motors)
 #define STEP_DIR_DRIVER_FIRST       0
 #define A4988                       0      // allows M0,M1,M2 bit patterens for 1x,2x,4x,8x,16x
