@@ -22,7 +22,9 @@
 #define DISPLAY_LANGUAGE             L_en //   L_en, English. Specify language with two letter country code, if supported.    Adjust
 #define DISPLAY_OLED               SH1106 // SH1106, OLED 1.3" I2C display commonly used. SSD1306 is a 0.96" OLED display.    Infreq
                                           //         The SSD1309 is often used on 1.54" or 2.3" I2C displays.
-#define DISPLAY_ROTATION          U8G2_R0 // U8G2_R0 Display rotation                                         
+#ifndef DISPLAY_ROTATION
+#define DISPLAY_ROTATION          U8G2_R0 // U8G2_R0 Display rotation
+#endif
 
 // SERIAL PORTS --------------------------------------------------------------------------------------------------------------------
 #define SERIAL_ONSTEP          SERIAL_ST4 // .._ST4, SERIAL_ST4 for ST4 port sync comms, you can also use any other available Infreq
