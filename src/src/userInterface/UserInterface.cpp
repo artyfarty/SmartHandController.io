@@ -4,9 +4,10 @@
 #include "UserInterface.h"
 
 #include "../lib/tasks/OnTask.h"
-#include "../lib/nv/NV.h"
-extern NVS nv;
+#include "../lib/nv/Nv.h"
+
 #include "../libApp/st4Aux/St4Aux.h"
+
 #include "../catalogs/Catalog.h"
 #include "bitmaps/Bitmaps.h"
 #include "src/lib/convert/Convert.h"
@@ -31,6 +32,15 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
     VF("MSG: NV, invalid key wipe "); V(nv.size); VLF(" bytes");
     if (nv.verify()) { VLF("MSG: NV, ready for reset to defaults"); }
   } else { VLF("MSG: NV, correct key found"); }
+
+  // get wireless ready
+  #if SERIAL_IP_MODE != OFF
+    wifiManager.readSettings();
+  #endif
+  #if SERIAL_BT_MODE != OFF
+    SERIAL_BT.begin(SERIAL_BT_NAME, true);
+    bluetoothManager.init();
+  #endif
 
   // confirm the data structure size
   if (DisplaySettingsSize < sizeof(DisplaySettings)) { nv.initError = true; DL("ERR: UserInterface::setup(); DisplaySettingsSize error NV subsystem writes disabled"); }
@@ -99,7 +109,7 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
   if (model == OLED_SSD1309_4W_HW_SPI) display = new U8G2_EXT_SSD1309_128X64_NONAME_F_4W_HW_SPI(DISPLAY_ROTATION);
 
   display->begin();
-  display->setContrast(displaySettings.maxContrast);
+  display->setContrast(displaySettings.maxContrastSelection);
   display->setFont(LF_STANDARD);
   message.init(display);
 
@@ -107,87 +117,18 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
   drawIntro();
   delay(2000);
 
-  // get guide commands ready, use single byte for SerialST4 or normal LX200 otherwise
-  // SerialST4 always returns 0 "may block", Teensy and ESP32 always return > 0
-  if (SERIAL_ONSTEP.availableForWrite() == 0) {
-    strcpy(ccMe, "\x0e"); // 14
-    strcpy(ccMw, "\x0f"); // 15
-    strcpy(ccMn, "\x10"); // 16
-    strcpy(ccMs, "\x11"); // 17
-    strcpy(ccQe, "\x12"); // 18
-    strcpy(ccQw, "\x13"); // 19
-    strcpy(ccQn, "\x14"); // 20
-    strcpy(ccQs, "\x15"); // 21
-  } else {
-    strcpy(ccMe, ":Me#");
-    strcpy(ccMw, ":Mw#");
-    strcpy(ccMn, ":Mn#");
-    strcpy(ccMs, ":Ms#");
-    strcpy(ccQe, ":Qe#");
-    strcpy(ccQw, ":Qw#");
-    strcpy(ccQn, ":Qn#");
-    strcpy(ccQs, ":Qs#");
-    strcpy(ccQ,  ":Q#");
-  }
-
   VF("MSG: UserInterface, start UI update task (rate 30ms priority 6)... ");
   if (tasks.add(30, 0, true, 6, updateWrapper, "UIupd")) { VLF("success"); } else { VLF("FAILED!"); }
 }
-
-void UI::guide(short dir) {
-    if (dir == SLEW_DIR_EAST) {
-        SERIAL_ONSTEP.write(ccMe);
-        //VF("MSG: UserInterface guide E");
-    } else if (dir == SLEW_DIR_WEST) {
-        SERIAL_ONSTEP.write(ccMw);
-        //VF("MSG: UserInterface guide W");
-    } else if (dir == SLEW_DIR_NORTH) {
-        SERIAL_ONSTEP.write(ccMn);
-    } else if (dir == SLEW_DIR_SOUTH) {
-        SERIAL_ONSTEP.write(ccMs);
-    } else if (dir == SLEW_STOP) {
-        SERIAL_ONSTEP.write(ccQ);
-        //VF("MSG: UserInterface guide STOP");
-    }
-    SERIAL_ONSTEP.flush();
-}
-
-uint8_t UI::getGuideRate() {
-    return activeGuideRate;
-}
-
-CMD_RESULT UI::setGuideRate(uint8_t newGuideRate) {
-    activeGuideRate = newGuideRate;
-    if (activeGuideRate < 4)  activeGuideRate = 4;
-    if (activeGuideRate > 10) activeGuideRate = 10;
-    char cmd[5] = ":Rn#"; cmd[2] = '0' + activeGuideRate - 1;
-    return onStep.Set(cmd);
-}
-
-void UI::setCustomGuideRate(float newGuideRate) { // :RA[n.n]#
-    char cmd[40];
-    sprintF(cmd, ":RA%1.3f#", newGuideRate);
-    SERIAL_ONSTEP.write(cmd);
-    sprintF(cmd, ":RE%1.3f#", newGuideRate);
-    SERIAL_ONSTEP.write(cmd);
-}
-
-void UI::focusPull(long diff) {
-    char cmd[40];
-    sprintf(cmd, ":FR%ld", diff);
-    // // :FR[sn]#   Goto focuser target position relative (in microns or steps)
-    SERIAL_ONSTEP.write(cmd);
-}
-
-
 void UI::poll() {
   // -----------------------------------------------------------------------------------------------------
   // connect/reconnect
   static unsigned long lastConnectedTime = 0;
   if (!status.connected && (long)(millis() - lastConnectedTime) > 2000) {
-    if (!firstConnect) { message.show(L_LOST_MSG, L_CONNECTION, 1000); }
+    if (!firstConnect) message.show(L_LOST_MSG, L_CONNECTION, 1000);
     connect();
     firstConnect = false;
+    reconnectionCount++;
   } else lastConnectedTime = millis();
 
   unsigned long time_now = millis();
@@ -196,7 +137,7 @@ void UI::poll() {
   // sleep and wake up display
   if (keyPad.anyPressed()) {
     if (sleepDisplay) {
-      display->setContrast(displaySettings.maxContrast);
+      display->setContrast(displaySettings.maxContrastSelection);
       display->sleepOff();
       sleepDisplay = false;
       lowContrast = false;
@@ -205,7 +146,7 @@ void UI::poll() {
       time_last_action = millis();
     }
     if (lowContrast) {
-      display->setContrast(displaySettings.maxContrast);
+      display->setContrast(displaySettings.maxContrastSelection);
       lowContrast = false;
       status.backgroundCommandRate = FOREGROUND_CMD_RATE;
       time_last_action = time_now;
@@ -213,7 +154,7 @@ void UI::poll() {
   } else
   if (sleepDisplay) {
     if ((long)time_now - time_keep_alive > 10000) {
-      SERIAL_ONSTEP.print(":#");
+      onStepLx200.SetF(":#");
       time_keep_alive = millis();
     }
     return;
@@ -266,7 +207,7 @@ void UI::poll() {
   // stop gotos
   if (status.getTrackingState() == Status::TRK_SLEWING || status.getParkState() == Status::PRK_PARKING) {
     if (keyPad.nsewPressed()) {
-      SERIAL_ONSTEP.print(":Q#"); SERIAL_ONSTEP.flush();
+      onStepLx200.Set(":Q#");
       // if aligning, try another align star
       if (status.align != Status::ALI_OFF) status.align = static_cast<Status::AlignState>(status.align - 1);
       time_last_action = millis();
@@ -281,23 +222,23 @@ void UI::poll() {
   {
     buttonCommand = false;
     #if ST4_AUX_INTERFACE == ON
-      if (!moveEast  && (keyPad.e->isDown() || auxST4.e->isDown())) { moveEast = true;   SERIAL_ONSTEP.write(ccMe); buttonCommand = true; } else
-      if ( moveEast  && (keyPad.e->isUp()   && auxST4.e->isUp()))   { moveEast = false;  SERIAL_ONSTEP.write(ccQe); buttonCommand = true; keyPad.e->clearPress(); auxST4.e->clearPress(); }
-      if (!moveWest  && (keyPad.w->isDown() || auxST4.w->isDown())) { moveWest = true;   SERIAL_ONSTEP.write(ccMw); buttonCommand = true; } else
-      if ( moveWest  && (keyPad.w->isUp()   && auxST4.w->isUp()))   { moveWest = false;  SERIAL_ONSTEP.write(ccQw); buttonCommand = true; keyPad.w->clearPress(); auxST4.w->clearPress(); }
-      if (!moveNorth && (keyPad.n->isDown() || auxST4.n->isDown())) { moveNorth = true;  SERIAL_ONSTEP.write(ccMn); buttonCommand = true; } else
-      if ( moveNorth && (keyPad.n->isUp()   && auxST4.n->isUp()))   { moveNorth = false; SERIAL_ONSTEP.write(ccQn); buttonCommand = true; keyPad.n->clearPress(); auxST4.n->clearPress(); }
-      if (!moveSouth && (keyPad.s->isDown() || auxST4.s->isDown())) { moveSouth = true;  SERIAL_ONSTEP.write(ccMs); buttonCommand = true; } else
-      if ( moveSouth && (keyPad.s->isUp()   && auxST4.s->isUp()))   { moveSouth = false; SERIAL_ONSTEP.write(ccQs); buttonCommand = true; keyPad.s->clearPress(); auxST4.s->clearPress(); }
+      if (!moveEast  && (keyPad.e->isDown() || auxST4.e->isDown())) { moveEast = true;   onStepLx200.SetF(ccMe); buttonCommand = true; } else
+      if ( moveEast  && (keyPad.e->isUp()   && auxST4.e->isUp()))   { moveEast = false;  onStepLx200.SetF(ccQe); buttonCommand = true; keyPad.e->clearPress(); auxST4.e->clearPress(); }
+      if (!moveWest  && (keyPad.w->isDown() || auxST4.w->isDown())) { moveWest = true;   onStepLx200.SetF(ccMw); buttonCommand = true; } else
+      if ( moveWest  && (keyPad.w->isUp()   && auxST4.w->isUp()))   { moveWest = false;  onStepLx200.SetF(ccQw); buttonCommand = true; keyPad.w->clearPress(); auxST4.w->clearPress(); }
+      if (!moveNorth && (keyPad.n->isDown() || auxST4.n->isDown())) { moveNorth = true;  onStepLx200.SetF(ccMn); buttonCommand = true; } else
+      if ( moveNorth && (keyPad.n->isUp()   && auxST4.n->isUp()))   { moveNorth = false; onStepLx200.SetF(ccQn); buttonCommand = true; keyPad.n->clearPress(); auxST4.n->clearPress(); }
+      if (!moveSouth && (keyPad.s->isDown() || auxST4.s->isDown())) { moveSouth = true;  onStepLx200.SetF(ccMs); buttonCommand = true; } else
+      if ( moveSouth && (keyPad.s->isUp()   && auxST4.s->isUp()))   { moveSouth = false; onStepLx200.SetF(ccQs); buttonCommand = true; keyPad.s->clearPress(); auxST4.s->clearPress(); }
     #else
-      /*if (!moveEast  && (keyPad.e->isDown())) { moveEast = true;   SERIAL_ONSTEP.write(ccMe); buttonCommand = true; } else
-      if ( moveEast  && (keyPad.e->isUp()  )) { moveEast = false;  SERIAL_ONSTEP.write(ccQe); buttonCommand = true; keyPad.e->clearPress(); }
-      if (!moveWest  && (keyPad.w->isDown())) { moveWest = true;   SERIAL_ONSTEP.write(ccMw); buttonCommand = true; } else
-      if ( moveWest  && (keyPad.w->isUp()  )) { moveWest = false;  SERIAL_ONSTEP.write(ccQw); buttonCommand = true; keyPad.w->clearPress(); }
-      if (!moveNorth && (keyPad.n->isDown())) { moveNorth = true;  SERIAL_ONSTEP.write(ccMn); buttonCommand = true; } else
-      if ( moveNorth && (keyPad.n->isUp()  )) { moveNorth = false; SERIAL_ONSTEP.write(ccQn); buttonCommand = true; keyPad.n->clearPress(); }
-      if (!moveSouth && (keyPad.s->isDown())) { moveSouth = true;  SERIAL_ONSTEP.write(ccMs); buttonCommand = true; } else
-      if ( moveSouth && (keyPad.s->isUp()  )) { moveSouth = false; SERIAL_ONSTEP.write(ccQs); buttonCommand = true; keyPad.s->clearPress(); }*/
+      if (!moveEast  && (keyPad.e->isDown())) { moveEast = true;   onStepLx200.SetF(ccMe); buttonCommand = true; } else
+      if ( moveEast  && (keyPad.e->isUp()  )) { moveEast = false;  onStepLx200.SetF(ccQe); buttonCommand = true; keyPad.e->clearPress(); }
+      if (!moveWest  && (keyPad.w->isDown())) { moveWest = true;   onStepLx200.SetF(ccMw); buttonCommand = true; } else
+      if ( moveWest  && (keyPad.w->isUp()  )) { moveWest = false;  onStepLx200.SetF(ccQw); buttonCommand = true; keyPad.w->clearPress(); }
+      if (!moveNorth && (keyPad.n->isDown())) { moveNorth = true;  onStepLx200.SetF(ccMn); buttonCommand = true; } else
+      if ( moveNorth && (keyPad.n->isUp()  )) { moveNorth = false; onStepLx200.SetF(ccQn); buttonCommand = true; keyPad.n->clearPress(); }
+      if (!moveSouth && (keyPad.s->isDown())) { moveSouth = true;  onStepLx200.SetF(ccMs); buttonCommand = true; } else
+      if ( moveSouth && (keyPad.s->isUp()  )) { moveSouth = false; onStepLx200.SetF(ccQs); buttonCommand = true; keyPad.s->clearPress(); }
     #endif
     if (buttonCommand) { time_last_action = millis(); return; }
   }
@@ -314,7 +255,7 @@ void UI::poll() {
         if (activeGuideRate < 4)  activeGuideRate = 4;
         if (activeGuideRate > 10) activeGuideRate = 10;
         char cmd[5] = ":Rn#"; cmd[2] = '0' + activeGuideRate - 1;
-        message.show(onStep.Set(cmd));
+        message.show(onStepLx200.Set(cmd));
       }
     break;
 
@@ -326,7 +267,7 @@ void UI::poll() {
         if (activeGuideRate < 1) activeGuideRate = 1;
         if (activeGuideRate > 3) activeGuideRate = 3;
         char cmd[5] =  ":Rn#"; cmd[2] = '0' + activeGuideRate - 1;
-        message.show(onStep.Set(cmd));
+        message.show(onStepLx200.Set(cmd));
       }
     break;
 
@@ -350,29 +291,50 @@ void UI::poll() {
 
     // reticle
     case 4:
-      if (keyPad.F->wasPressed()) { SERIAL_ONSTEP.print(":B-#"); message.brief(L_FKEY_RETI_DN); } else
-      if (keyPad.f->wasPressed()) { SERIAL_ONSTEP.print(":B+#"); message.brief(L_FKEY_RETI_UP); }
+      if (keyPad.F->wasPressed()) { onStepLx200.SetF(":B-#"); message.brief(L_FKEY_RETI_DN); } else
+      if (keyPad.f->wasPressed()) { onStepLx200.SetF(":B+#"); message.brief(L_FKEY_RETI_UP); }
     break;
 
     // rotator
     case 5:
-      if (rotState == RS_STOPPED && keyPad.F->isDown()) { rotState = RS_CCW_SLOW; SERIAL_ONSTEP.print(":r2#:rc#:r<#"); message.brief(L_FKEY_ROT_DN); buttonCommand = true; }
-      else if ((rotState == RS_CCW_SLOW || rotState == RS_CCW_FAST) && keyPad.F->isUp()) { rotState = RS_STOPPED; SERIAL_ONSTEP.print(":rQ#"); buttonCommand = true; keyPad.F->clearPress(); }
-      else if (rotState == RS_STOPPED && keyPad.f->isDown()) { rotState = RS_CW_SLOW;  SERIAL_ONSTEP.print(":r2#:rc#:r>#"); message.brief(L_FKEY_ROT_UP); buttonCommand = true; }
-      else if ((rotState == RS_CW_SLOW || rotState == RS_CW_FAST) && keyPad.f->isUp()) { rotState = RS_STOPPED; SERIAL_ONSTEP.print(":rQ#"); buttonCommand = true; keyPad.f->clearPress(); }
-      else if (rotState == RS_CCW_SLOW && keyPad.F->isDown() && keyPad.F->timeDown() > 5000) { rotState = RS_CCW_FAST; SERIAL_ONSTEP.print(":r4#:rc#:r<#"); message.brief(L_FKEY_ROTF_DN); }
-      else if (rotState == RS_CW_SLOW  && keyPad.f->isDown() && keyPad.f->timeDown() > 5000) { rotState = RS_CW_FAST;  SERIAL_ONSTEP.print(":r4#:rc#:r>#"); message.brief(L_FKEY_ROTF_UP); }
+      if (rotState == RS_STOPPED && keyPad.F->isDown()) { rotState = RS_CCW_SLOW; onStepLx200.SetF(":r1#:rc#:r<#"); buttonCommand = true; }
+      else if ((rotState == RS_CCW_SLOW || rotState == RS_CCW_MID || rotState == RS_CCW_FAST) && keyPad.F->isUp()) { rotState = RS_STOPPED; onStepLx200.SetF(":rQ#"); buttonCommand = true; keyPad.F->clearPress(); }
+      else if (rotState == RS_STOPPED && keyPad.f->isDown()) { rotState = RS_CW_SLOW;  onStepLx200.SetF(":r1#:rc#:r>#"); buttonCommand = true; }
+      else if ((rotState == RS_CW_SLOW || rotState == RS_CW_MID || rotState == RS_CW_FAST) && keyPad.f->isUp()) { rotState = RS_STOPPED; onStepLx200.SetF(":rQ#"); buttonCommand = true; keyPad.f->clearPress(); }
+      else if (rotState == RS_CCW_MID && keyPad.F->isDown() && keyPad.F->timeDown() > 6000) { rotState = RS_CCW_FAST; onStepLx200.SetF(":r4#:rc#:r<#"); }
+      else if (rotState == RS_CCW_SLOW && keyPad.F->isDown() && keyPad.F->timeDown() > 3000) { rotState = RS_CCW_MID; onStepLx200.SetF(":r2#:rc#:r<#"); }
+      else if (rotState == RS_CW_MID  && keyPad.f->isDown() && keyPad.f->timeDown() > 6000) { rotState = RS_CW_FAST;  onStepLx200.SetF(":r4#:rc#:r>#"); }
+      else if (rotState == RS_CW_SLOW  && keyPad.f->isDown() && keyPad.f->timeDown() > 3000) { rotState = RS_CW_MID;  onStepLx200.SetF(":r4#:rc#:r>#"); }
+      if (rotState > RS_STOPPED) nextRotMessageUpdateCycles = 120;
+      if (nextRotMessageUpdateCycles > 0) {
+        nextRotMessageUpdateCycles--;
+        float rpos = status.getRotatorPosition();
+        if (!isnan(rpos)) {
+          char temp[24];
+          if (rotState == RS_CCW_SLOW || rotState == RS_CCW_MID || rotState == RS_CCW_FAST) sprintf(temp, L_ROTATE " < %d°", (int)round(rpos)); else
+          if (rotState == RS_CW_SLOW || rotState == RS_CW_MID || rotState == RS_CW_FAST) sprintf(temp, L_ROTATE " > %d°", (int)round(rpos)); else
+          sprintf(temp, L_ROTATE "    %d°", (int)round(rpos));
+          message.brief(temp);
+        } else message.brief("?");
+      }
     break;
 
     // focusers
     case 6: case 7: case 8: case 9: case 10: case 11:
-      if (focusState == FS_STOPPED && keyPad.F->isDown()) { focusState = FS_OUT_SLOW; SERIAL_ONSTEP.print(":F2#:F+#"); message.brief(L_FKEY_FOC_DN); buttonCommand = true; }
-      else if ((focusState == FS_OUT_SLOW || focusState == FS_OUT_FAST) && keyPad.F->isUp()) { focusState = FS_STOPPED; SERIAL_ONSTEP.print(":FQ#"); buttonCommand = true; keyPad.F->clearPress(); }
-      else if (focusState == FS_STOPPED && keyPad.f->isDown()) { focusState = FS_IN_SLOW;  SERIAL_ONSTEP.print(":F2#:F-#"); message.brief(L_FKEY_FOC_UP); buttonCommand = true; }
-      else if ((focusState == FS_IN_SLOW || focusState == FS_IN_FAST) && keyPad.f->isUp()) { focusState = FS_STOPPED; SERIAL_ONSTEP.print(":FQ#"); buttonCommand = true; keyPad.f->clearPress(); }
-      #ifndef FOCUSER_ACCELERATE_DISABLE_ON
-        else if (focusState == FS_OUT_SLOW && keyPad.F->isDown() && keyPad.F->timeDown() > 5000) { focusState = FS_OUT_FAST; SERIAL_ONSTEP.print(":F4#:F+#"); message.brief(L_FKEY_FOCF_DN); }
-        else if (focusState == FS_IN_SLOW  && keyPad.f->isDown() && keyPad.f->timeDown() > 5000) { focusState = FS_IN_FAST;  SERIAL_ONSTEP.print(":F4#:F-#"); message.brief(L_FKEY_FOCF_UP); }
+      #ifdef FOCUSER_ACCELERATE_DISABLE_ON
+        if (focusState == FS_STOPPED && keyPad.F->isDown()) { focusState = FS_OUT_SLOW; onStepLx200.SetF(":F2#:F+#"); buttonCommand = true; }
+        else if ((focusState == FS_OUT_SLOW || focusState == FS_OUT_MID || focusState == FS_OUT_FAST) && keyPad.F->isUp()) { focusState = FS_STOPPED; onStepLx200.SetF(":FQ#"); buttonCommand = true; keyPad.F->clearPress(); }
+        else if (focusState == FS_STOPPED && keyPad.f->isDown()) { focusState = FS_IN_SLOW;  onStepLx200.SetF(":F2#:F-#"); buttonCommand = true; }
+        else if ((focusState == FS_IN_SLOW || focusState == FS_IN_MID || focusState == FS_IN_FAST) && keyPad.f->isUp()) { focusState = FS_STOPPED; onStepLx200.SetF(":FQ#"); buttonCommand = true; keyPad.f->clearPress(); }
+      #else
+        if (focusState == FS_STOPPED && keyPad.F->isDown()) { focusState = FS_OUT_SLOW; onStepLx200.SetF(":F1#:F+#"); buttonCommand = true; }
+        else if ((focusState == FS_OUT_SLOW || focusState == FS_OUT_MID || focusState == FS_OUT_FAST) && keyPad.F->isUp()) { focusState = FS_STOPPED; onStepLx200.SetF(":FQ#"); buttonCommand = true; keyPad.F->clearPress(); }
+        else if (focusState == FS_STOPPED && keyPad.f->isDown()) { focusState = FS_IN_SLOW;  onStepLx200.SetF(":F1#:F-#"); buttonCommand = true; }
+        else if ((focusState == FS_IN_SLOW || focusState == FS_IN_MID || focusState == FS_IN_FAST) && keyPad.f->isUp()) { focusState = FS_STOPPED; onStepLx200.SetF(":FQ#"); buttonCommand = true; keyPad.f->clearPress(); }
+        else if (focusState == FS_OUT_MID && keyPad.F->isDown() && keyPad.F->timeDown() > 6000) { focusState = FS_OUT_FAST; onStepLx200.SetF(":F4#:F+#"); }
+        else if (focusState == FS_OUT_SLOW && keyPad.F->isDown() && keyPad.F->timeDown() > 3000) { focusState = FS_OUT_MID; onStepLx200.SetF(":F2#:F+#"); }
+        else if (focusState == FS_IN_MID  && keyPad.f->isDown() && keyPad.f->timeDown() > 6000) { focusState = FS_IN_FAST;  onStepLx200.SetF(":F4#:F-#"); }
+        else if (focusState == FS_IN_SLOW  && keyPad.f->isDown() && keyPad.f->timeDown() > 3000) { focusState = FS_IN_MID;  onStepLx200.SetF(":F2#:F-#"); }
       #endif
     break;
 
@@ -388,12 +350,12 @@ void UI::poll() {
             int v = lround(status.featureValue1()/12.75F) - 2;
             if (v < 0) v = 0;
             sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, (int)lround(v*12.75F));
-            SERIAL_ONSTEP.print(cmd);
+            onStepLx200.Set(cmd);
             sprintf(line2, "%i%%", v*5);
             message.show(status.featureName(), line2, 1000);
           } else {
             sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, 0);
-            SERIAL_ONSTEP.print(cmd);
+            onStepLx200.Set(cmd);
             sprintf(line2, "%s", L_OFF);
             message.show(status.featureName(), line2, 1000);
           }
@@ -404,12 +366,12 @@ void UI::poll() {
             int v = lround(status.featureValue1()/12.75F) + 2;
             if (v > 20) v = 20;
             sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, (int)lround(v*12.75F));
-            SERIAL_ONSTEP.print(cmd);
+            onStepLx200.Set(cmd);
             sprintf(line2, "%i%%", v*5);
             message.show(status.featureName(), line2, 1000);
           } else {
             sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, 1);
-            SERIAL_ONSTEP.print(cmd);
+            onStepLx200.Set(cmd);
             sprintf(line2, "%s",  L_ON);
             message.show(status.featureName(), line2, 1000);
           }
@@ -729,7 +691,7 @@ bool UI::SelectStarAlign() {
   cat_mgr.setIndex(0);
   if (cat_mgr.isInitialized()) {
     if (display->UserInterfaceCatalog(&keyPad, L_SELECT_STAR)) {
-      bool ok = message.show(onStep.SyncSelectedStar(cat_mgr.getIndex()),false);
+      bool ok = message.show(onStepLx200.SyncSelectedStar(cat_mgr.getIndex()),false);
       return ok;
     }
   }
@@ -737,118 +699,157 @@ bool UI::SelectStarAlign() {
 }
 
 void UI::connect() {
-  char s[20] = "";
-  int thisTry = 0;
-  bool connectSuccess;
-
-  #if SERIAL_IP_MODE == STATION
-    if (firstConnect) menuWifi();
-  #endif
 
 initAgain:
-  #if SERIAL_IP_MODE == STATION
-    if (!wifiManager.active) {
-      bool initSuccess = true;
-      if (firstConnect) {
-        VLF("MSG: Connect, WiFi starting");
-        message.show(L_WIFI_CONNECTION1, wifiManager.sta->ssid, 100);
-      } else {
-        VLF("MSG: Connect, WiFi restarting");
-        message.show(L_WIFI_CONNECTION2, wifiManager.sta->ssid, 100);
-      }
-      delay(1000);
-      if (!wifiManager.init()) initSuccess = false;
+  // count down reconnect attempts
+  if (--skipConnectMenu < 0) skipConnectMenu = 0;
 
-      if (!initSuccess) {
-        VLF("MSG: Connect, WiFi failed");
-        message.show(L_WIFI_CONNECTION2, L_FAILED, 2000);
-        delay(5000);
+  if (!skipConnectMenu && !firstConnect) {
+    #if SERIAL_IP_MODE != OFF
+      if (onStep.connectionMode == CM_WIFI) {
+        SERIAL_IP.end();
+        wifiManager.disconnect();
+      }
+    #endif
+    #if SERIAL_BT_MODE != OFF
+      if (onStep.connectionMode == CM_BLUETOOTH) { HAL_RESET(); }
+    #endif
+    #if SERIAL_ONSTEP != OFF
+      if (onStep.connectionMode == CM_SERIAL) SERIAL_ONSTEP.end();
+    #endif
+  }
+
+  #if SERIAL_IP_MODE != OFF || SERIAL_BT_MODE != OFF
+    if (!skipConnectMenu) {
+      bool success;
+      do { success = menuWireless(); } while (!success);
+    }
+  #endif
+
+  #if SERIAL_IP_MODE != OFF
+    if (onStep.connectionMode == CM_WIFI) {
+      if (!wifiManager.active) {
+        bool initSuccess = true;
+        if (firstConnect) {
+          VLF("MSG: Connect, WiFi starting");
+          message.show(L_WIFI_CONNECTION1, wifiManager.sta->ssid, 100);
+        } else {
+          VLF("MSG: Connect, WiFi restarting");
+          message.show(L_WIFI_CONNECTION2, wifiManager.sta->ssid, 100);
+        }
+        delay(500);
+
+        wifiManager.staNameLookup = true;
+        if (!wifiManager.init()) initSuccess = false;
+
+        if (!initSuccess) {
+          VLF("MSG: Connect, WiFi failed");
+          message.show(L_WIFI_CONNECTION2, L_FAILED, 2000);
+          delay(5000);
+          goto initAgain;
+        }
+      }
+
+      message.show(L_CONNECTING, IPAddress(wifiManager.sta->target).toString().c_str(), 1000);
+      if (!SERIAL_IP.begin(serialBaud)) {
+        VLF("MSG: Connect, to target failed");
+        wifiManager.disconnect();
+        delay(2000);
+        message.show(L_CONNECTING, L_FAILED, 2000);
         goto initAgain;
       }
     }
   #endif
-
-  connectSuccess = true;
-  #if SERIAL_IP_MODE == STATION
-    message.show(L_CONNECTING, IPAddress(wifiManager.sta->target).toString().c_str(), 1000);
-    if (!SERIAL_ONSTEP.begin(serialBaud)) connectSuccess = false;
-  #else
-    #if defined(SERIAL_ONSTEP_RX) && defined(SERIAL_ONSTEP_TX)
-      SERIAL_ONSTEP.begin(serialBaud, SERIAL_8N1, SERIAL_ONSTEP_RX, SERIAL_ONSTEP_TX);
-    #else
-      SERIAL_ONSTEP.begin(serialBaud);
-    #endif
+  #if SERIAL_ONSTEP != OFF
+    if (onStep.connectionMode == CM_SERIAL) {
+      #if defined(SERIAL_ONSTEP_RX) && defined(SERIAL_ONSTEP_TX)
+        SERIAL_ONSTEP.begin(serialBaud, SERIAL_8N1, SERIAL_ONSTEP_RX, SERIAL_ONSTEP_TX);
+      #else
+        SERIAL_ONSTEP.begin(serialBaud);
+      #endif
+    }
   #endif
-
-  if (!connectSuccess) {
-    VLF("MSG: Connect, to target failed");
-    SERIAL_ONSTEP.end();
-    #if SERIAL_IP_MODE == STATION
-      wifiManager.disconnect();
-    #endif
-    delay(7000);
-    message.show(L_CONNECTING, L_FAILED, 2000);
-    goto initAgain;
-  }
 
   VLF("MSG: Connect, looking for OnStep...");
 
+  onStepContactTry = 0;
+
 queryAgain:
-  if (thisTry % 1 == 0) message.show(L_LOOKING, "OnStep", 1000); else message.show(L_LOOKING, "...", 1000);
+  if (onStepContactTry % 1 == 0) message.show(L_LOOKING, "OnStep", 500); else message.show(L_LOOKING, "...", 500);
 
   for (int i = 0; i < 3; i++) {
-    SERIAL_ONSTEP.print(":#");
-    delay(400);
-    SERIAL_ONSTEP.flush();
     delay(100);
+    onStepLx200.SetF(":#");
+
+    delay(300);
+    #if SERIAL_IP_MODE != OFF
+      if (onStep.connectionMode == CM_WIFI) SERIAL_IP.flush();
+    #endif
+    #if SERIAL_ONSTEP != OFF
+      if (onStep.connectionMode == CM_SERIAL) SERIAL_ONSTEP.flush();
+    #endif
   }
 
-  CMD_RESULT r = onStep.Get(":GVP#", s);
+  char s[80] = "";
+  CMD_RESULT r = onStepLx200.Get(":GVP#", s);
   if (r != CR_VALUE_GET || !strstr(s, "On-Step")) {
-    if (++thisTry % 5 != 0) {
-      goto queryAgain;
-    } else {
-      SERIAL_ONSTEP.end();
-      #if SERIAL_IP_MODE == STATION
+    if (++onStepContactTry < 3) goto queryAgain;
+
+    #if SERIAL_IP_MODE != OFF
+      if (onStep.connectionMode == CM_WIFI) {
+        SERIAL_IP.end();
         wifiManager.disconnect();
-      #endif
-      delay(7000);
-      thisTry = 0;
-      goto initAgain;
-    }
+      }
+    #endif
+    #if SERIAL_ONSTEP != OFF
+      if (onStep.connectionMode == CM_SERIAL) SERIAL_ONSTEP.end();
+    #endif
+
+    delay(1000);
+
+    goto initAgain;
   }
 
   VLF("MSG: Connect, found OnStep");
 
+  initGuideCommands();
+
+  #if SERIAL_IP_MODE != OFF
+    if (onStep.connectionMode == CM_WIFI) skipConnectMenu = 3;
+  #endif
+  #if SERIAL_BT_MODE != OFF
+    if (onStep.connectionMode == CM_BLUETOOTH) skipConnectMenu = 2;
+  #endif
+  #if SERIAL_ONSTEP != OFF
+    if (onStep.connectionMode == CM_SERIAL) skipConnectMenu = 2;
+  #endif
+
 again2:
-  delay(1000);
+  delay(500);
 
   // OnStep coordinate mode for getting and setting RA/Dec
   // 0 = OBSERVED_PLACE (same as not supported)
   // 1 = TOPOCENTRIC (does refraction)
   // 2 = ASTROMETRIC_J2000 (does refraction and precession/nutation)
-  thisTry = 0;
-  if (onStep.Get(":GXEE#", s) == CR_VALUE_GET && s[0] >= '0' && s[0] <= '3' && s[1] == 0) {
+  onStepContactTry = 0;
+  if (onStepLx200.Get(":GXEE#", s) == CR_VALUE_GET && s[0] >= '0' && s[0] <= '3' && s[1] == 0) {
     if (s[0] == '0') {
       VLF("MSG: Connect, coords Observed Place");
       telescopeCoordinates = OBSERVED_PLACE; 
-      message.show(L_CONNECTION, L_OK "!", 1000);
-      status.connected = true;
+      message.show(L_CONNECTION, L_OK "!", 500);
     } else 
     if (s[0] == '1') {
       VLF("MSG: Connect, coords Topocentric");
       telescopeCoordinates = TOPOCENTRIC; 
-      message.show(L_CONNECTION, L_OK "!", 1000);
-      status.connected = true;
+      message.show(L_CONNECTION, L_OK "!", 500);
     } else 
     if (s[0] == '2') {
       VLF("MSG: Connect, coords J2000");
       telescopeCoordinates = ASTROMETRIC_J2000;
-      message.show(L_CONNECTION, L_OK "!", 1000);
-      status.connected = true;
+      message.show(L_CONNECTION, L_OK "!", 500);
     }
   } else {
-    if (++thisTry <= 3) goto again2;
+    if (++onStepContactTry <= 3) goto again2;
     VLF("WRN: Connect, get coords failed");
     VLF("MSG: Connect, fallback Observed Place");
     telescopeCoordinates = OBSERVED_PLACE;
@@ -860,6 +861,38 @@ again2:
   hasAuxFeatures = status.featureScan();
 
   status.connected = true;
+}
+
+// get guide commands ready, use single byte for SerialST4 or normal LX200 otherwise
+void UI::initGuideCommands() {
+
+  // SerialST4 always returns 0 "may block", Teensy and ESP32 always return > 0
+  bool useFastGuides = false;
+  #if SERIAL_ONSTEP != OFF
+    if (onStep.connectionMode == CM_SERIAL && SERIAL_ONSTEP.availableForWrite() == 0) useFastGuides = true;
+  #endif
+
+  if (useFastGuides) {
+    VLF("MSG: UserInterface, using fast single byte guide commands ");
+    strcpy(ccMe, "\x0e"); // 14
+    strcpy(ccMw, "\x0f"); // 15
+    strcpy(ccMn, "\x10"); // 16
+    strcpy(ccMs, "\x11"); // 17
+    strcpy(ccQe, "\x12"); // 18
+    strcpy(ccQw, "\x13"); // 19
+    strcpy(ccQn, "\x14"); // 20
+    strcpy(ccQs, "\x15"); // 21
+  } else {
+    VLF("MSG: UserInterface, using LX200 guide commands ");
+    strcpy(ccMe, ":Me#");
+    strcpy(ccMw, ":Mw#");
+    strcpy(ccMn, ":Mn#");
+    strcpy(ccMs, ":Ms#");
+    strcpy(ccQe, ":Qe#");
+    strcpy(ccQw, ":Qw#");
+    strcpy(ccQn, ":Qn#");
+    strcpy(ccQs, ":Qs#");
+  }
 }
 
 UI userInterface;

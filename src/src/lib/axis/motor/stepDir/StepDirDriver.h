@@ -83,16 +83,19 @@ class StepDirDriver {
     StepDirDriverSettings settings;
 
   protected:
-    inline float mAToCs(float mA) { return 32.0F*(((mA/1000.0F)*(rSense+0.02F))/0.325F) - 1.0F; }
+    uint8_t axisNumber;
+
+    char axisPrefix[36]; // prefix for debug messages
+    char axisPrefixWarn[36]; // additional prefix for debug messages
+
     float rSense = 0.11F;
 
-    uint8_t axisNumber;
     DriverStatus status = {false, {false, false}, {false, false}, false, false, false, false};
     #if DEBUG != OFF
       DriverStatus lastStatus = {false, {false, false}, {false, false}, false, false, false, false};
     #endif
     unsigned long timeLastStatusUpdate = 0;
-  
+
     const int16_t* microsteps;
     int16_t microstepRatio = 1;
     int16_t microstepCode = OFF;

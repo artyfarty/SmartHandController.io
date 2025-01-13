@@ -10,6 +10,10 @@
 
 enum Direction: uint8_t {DIR_NONE, DIR_FORWARD, DIR_REVERSE, DIR_BOTH};
 
+#ifndef STEP_WAVE_FORM
+#define STEP_WAVE_FORM SQUARE
+#endif
+
 class Motor {
   public:
     // sets up the motor identification
@@ -102,23 +106,20 @@ class Motor {
     virtual int getStepsPerStepSlewing();
 
     // get synchronized state (automatic movement of target at setFrequencySteps() rate)
-    inline bool getSynchronized() { return synchronized; }
+    inline bool getSynchronized() { return sync; }
 
     // set synchronized state (automatic movement of target at setFrequencySteps() rate)
     virtual inline void setSynchronized(bool state) {
       if (state) {
         noInterrupts();
-        synchronized = state;
+        sync = state;
         targetSteps = motorSteps;
         interrupts();
-      } else synchronized = state;
+      } else sync = state;
     }
 
     // get the current direction of motion
     Direction getDirection();
-
-    // return the encoder count, if present
-    virtual int32_t getEncoderCount() { return 0; }
 
     // set slewing state (hint that we are about to slew or are done slewing)
     virtual void setSlewing(bool state);
@@ -128,6 +129,15 @@ class Motor {
 
     // calibrate the motor driver if required
     virtual void calibrateDriver() {}
+
+    // set zero of absolute encoders
+    virtual uint32_t encoderZero() { return 0; }
+
+    // return the encoder count, if present
+    virtual int32_t getEncoderCount() { return 0; }
+
+    // set origin of absolute encoders
+    virtual void encoderSetOrigin(uint32_t origin) {}
 
     // monitor and respond to motor state as required
     virtual void poll() {}
@@ -139,6 +149,8 @@ class Motor {
 
     bool enabled = false;                      // enable/disable logical state
 
+    bool calibrating = false;                  // shadow disable when calibrating
+
   protected:
     // disable backlash compensation, to work properly there must be an enable call to match
     void disableBacklash();
@@ -147,9 +159,10 @@ class Motor {
     void enableBacklash();
 
     volatile uint8_t axisNumber = 0;           // axis number for this motor (1 to 9 in OnStepX)
-    char axisPrefix[16];                       // prefix for debug messages
+    char axisPrefix[24];                       // prefix for debug messages
+    char axisPrefixWarn[24];                   // additional prefix for debug messages
 
-    volatile bool synchronized = true;         // locks movement of axis target with timer rate
+    volatile bool sync = true;                 // locks movement of axis target with timer rate
     bool limitsCheck = true;                   // enable/disable numeric range limits (doesn't apply to limit switches)
 
     uint8_t homeSenseHandle = 0;               // home sensor handle

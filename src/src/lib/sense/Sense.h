@@ -3,6 +3,7 @@
 // analog mode reads uses software schmitt trigger with threshold/hysteresis-band
 // digital mode reads have basic hf EMI/RFI noise filtering
 #pragma once
+
 #include "../../Common.h"
 
 #ifndef THLD
@@ -30,6 +31,7 @@ class SenseInput {
 
     int isOn();
     int changed();
+    inline void reverse(bool state) { reverseState = state; }
 
     void poll();
 
@@ -38,6 +40,7 @@ class SenseInput {
 
     int pin;
     int activeState = OFF;
+    bool reverseState = false;
     bool isAnalog;
     int threshold;
     int hysteresis;
@@ -67,6 +70,10 @@ class Sense {
     // check the sense associated input pin and return true if it has changed since last read
     // \param handle      sense handle
     int changed(uint8_t handle);
+
+    // reverse the on state for this pin
+    // \param handle      sense handle
+    void reverse(uint8_t handle, bool state);
 
     // call repeatedly to check inputs for changes
     void poll();

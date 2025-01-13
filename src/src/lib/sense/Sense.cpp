@@ -4,7 +4,9 @@
 // digital mode reads have basic hf EMI/RFI noise filtering
 
 #include "Sense.h"
+
 #include "../tasks/OnTask.h"
+#include "../gpioEx/GpioEx.h"
 
 #ifndef ANALOG_READ_RANGE
   #define ANALOG_READ_RANGE 1023
@@ -50,7 +52,12 @@ SenseInput::SenseInput(int pin, int initState, int32_t trigger) {
 int SenseInput::isOn() {
   int value = lastValue;
   if (isAnalog) {
-    int sample = analogRead(pin);
+    #ifdef ESP32
+      int sample = round((analogReadMilliVolts(pin)/3300.0F)*(float)ANALOG_READ_RANGE);
+    #else
+      int sample = analogRead(pin);
+    #endif
+
     if (sample >= threshold + hysteresis) value = HIGH;
     if (sample <= threshold - hysteresis) value = LOW;
   } else {
@@ -59,6 +66,7 @@ int SenseInput::isOn() {
     long stableMs = (long)(millis() - stableStartMs);
     if (stableMs >= hysteresis) value = stableSample;
   }
+  if (reverseState) { if (value == LOW) value = HIGH; else value = LOW; }
   lastValue = value;
   return value == activeState;
 }
@@ -66,7 +74,12 @@ int SenseInput::isOn() {
 int SenseInput::changed() {
   int value = lastChangedValue;
   if (isAnalog) {
-    int sample = analogRead(pin);
+    #ifdef ESP32
+      int sample = round((analogReadMilliVolts(pin)/3300.0F)*(float)ANALOG_READ_RANGE);
+    #else
+      int sample = analogRead(pin);
+    #endif
+
     if (sample >= threshold + hysteresis) value = HIGH;
     if (sample < threshold - hysteresis) value = LOW;
   } else {
@@ -75,6 +88,7 @@ int SenseInput::changed() {
     long stableMs = (long)(millis() - stableStartMs);
     if (stableMs >= hysteresis) value = stableSample;
   }
+  if (reverseState) { if (value == LOW) value = HIGH; else value = LOW; }
   bool result = lastChangedValue != value;
   lastChangedValue = value;
   return result;
@@ -87,12 +101,23 @@ void SenseInput::poll() {
     if (stableSample != sample) { stableStartMs = millis(); stableSample = sample; }
     long stableMs = (long)(millis() - stableStartMs);
     if (stableMs > hysteresis) value = stableSample;
+    if (reverseState) { if (value == LOW) value = HIGH; else value = LOW; }
   }
   lastValue = value;
 }
 
 void SenseInput::reset() {
-  if (isAnalog) { if ((int)analogRead(pin) > threshold) lastValue = HIGH; else lastValue = LOW; } else lastValue = digitalReadEx(pin);
+  if (isAnalog) {
+    #ifdef ESP32
+      int sample = round((analogReadMilliVolts(pin)/3300.0F)*(float)ANALOG_READ_RANGE);
+    #else
+      int sample = analogRead(pin);
+    #endif
+    if (sample > threshold) lastValue = HIGH; else lastValue = LOW;
+  } else {
+    lastValue = digitalReadEx(pin);
+  }
+
   stableSample = lastValue;
 }
 
@@ -120,6 +145,11 @@ int Sense::isOn(uint8_t handle) {
 int Sense::changed(uint8_t handle) {
   if (handle == 0) return false;
   return senseInput[handle - 1]->changed();
+}
+
+void Sense::reverse(uint8_t handle, bool state) {
+  if (handle == 0) return;
+  senseInput[handle - 1]->reverse(state);
 }
 
 void Sense::poll() {

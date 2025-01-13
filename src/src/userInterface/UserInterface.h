@@ -6,7 +6,7 @@
 #include "../libApp/keyPad/KeyPad.h"
 #include "../libApp/u8g2ext/u8g2_ext.h"
 #include "../libApp/status/Status.h"
-#include "../libApp/cmd/Cmd.h"
+#include "../libApp/cmdLx200/CmdLx200.h"
 #include "message/Message.h"
 
 // coordinate mode for getting and setting RA/Dec
@@ -21,11 +21,7 @@
 #define onstep_logo_width 128
 #define onstep_logo_height 68
 
-#define SLEW_DIR_EAST       5
-#define SLEW_DIR_WEST       -5
-#define SLEW_DIR_NORTH      10
-#define SLEW_DIR_SOUTH      -10
-#define SLEW_STOP           0
+enum OperatingMode {OM_SERIAL, OM_WIFI};
 
 enum OLED { OLED_SH1106, OLED_SH1106_4W_SW_SPI, OLED_SH1106_4W_HW_SPI, OLED_SSD1306, OLED_SSD1309, OLED_SSD1309_4W_SW_SPI, OLED_SSD1309_4W_HW_SPI };
 #define SH1106 OLED_SH1106
@@ -37,15 +33,15 @@ enum OLED { OLED_SH1106, OLED_SH1106_4W_SW_SPI, OLED_SH1106_4W_HW_SPI, OLED_SSD1
 #define SSD1309_HW_SPI OLED_SSD1309_4W_HW_SPI
 
 enum MENU_RESULT { MR_OK, MR_CANCEL, MR_QUIT };
-enum FocusState {FS_STOPPED, FS_IN_FAST, FS_IN_SLOW, FS_OUT_SLOW, FS_OUT_FAST};
-enum RotState {RS_STOPPED, RS_CW_FAST, RS_CW_SLOW, RS_CCW_SLOW, RS_CCW_FAST};
+enum FocusState {FS_STOPPED, FS_IN_FAST, FS_IN_MID, FS_IN_SLOW, FS_OUT_SLOW, FS_OUT_MID, FS_OUT_FAST};
+enum RotState {RS_STOPPED, RS_CW_FAST, RS_CW_MID, RS_CW_SLOW, RS_CCW_SLOW, RS_CCW_MID, RS_CCW_FAST};
 
 #define DisplaySettingsSize 24
 typedef struct DisplaySettings {
   int32_t maxContrastSelection;
   int32_t dimTimeoutSelection;
   int32_t blankTimeoutSelection;
-  uint8_t maxContrast;
+  uint8_t unused;
   long blankTimeout;
   long dimTimeout;
 } DisplaySettings;
@@ -66,19 +62,17 @@ public:
     boolean hrs24 = false;
   #endif
 
-  CMD_RESULT setGuideRate(uint8_t newGuideRate);
-  void setCustomGuideRate(float newGuideRate);
-  uint8_t getGuideRate();
-  void guide(short dir);
-  void focusPull(long diff);
-
 private:
   void updateMainDisplay(u8g2_uint_t page);
 
   void menuMain();
   void menuFeatureKey();
-  #if SERIAL_IP_MODE == STATION
-    void menuWifi();
+  #if SERIAL_IP_MODE != OFF || SERIAL_BT_MODE != OFF
+    bool menuWireless();
+    void menuWiFiStationEditSelect(const char *ssid);
+    void menuWiFiStationEdit(const char *ssid, int index);
+    void menuBTStationEditSelect(const char *name, const char *address);
+    void menuBTStationEdit(const char *name, const char *address, int index);
   #endif
   
   MENU_RESULT menuSyncGoto(bool sync);
@@ -132,6 +126,8 @@ private:
   void menuMeridianE();
   void menuMeridianW();
   void menuFirmware();
+  
+  void initGuideCommands();
 
   Status status;
 
@@ -140,12 +136,19 @@ private:
   unsigned long maxT = 0;
   char _version[20] = "Version ?";
 
-  DisplaySettings displaySettings = {1, 2, 3, 255, 0, 0};
+  DisplaySettings displaySettings = {DISPLAY_CONTRAST_DEFAULT, 2, 3, 255, 0, 0};
 
   FocusState focusState = FS_STOPPED;
+  int nextFocuserMessageUpdateCycles = 0;
   RotState rotState = RS_STOPPED;
+  int nextRotMessageUpdateCycles = 0;
 
+  #if SERIAL_BT_MODE != OFF
+    bool bluetoothStarted = false;
+  #endif
   bool firstConnect = true;
+  int skipConnectMenu = 1;
+  int onStepContactTry;
   bool hasAuxFeatures = false;
   bool sleepDisplay = false;
   bool lowContrast = false;
@@ -165,7 +168,6 @@ private:
   char ccQw[5];
   char ccQn[5];
   char ccQs[5];
-  char ccQ[5];
 
   unsigned long lastpageupdate = millis();
   unsigned long time_last_action = millis();
@@ -195,6 +197,7 @@ private:
   long angleDEC = 0;
 
   long serialBaud = 9600;
+  long reconnectionCount;
 };
 
 extern UI userInterface;

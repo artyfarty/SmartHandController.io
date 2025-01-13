@@ -76,8 +76,8 @@ StepDirMotor::StepDirMotor(const uint8_t axisNumber, const StepDirPins *Pins, St
   if (axisNumber < 1 || axisNumber > 9) return;
 
   driverType = STEP_DIR;
-  strcpy(axisPrefix, "MSG: StepDir_, ");
-  axisPrefix[12] = '0' + axisNumber;
+  strcpy(axisPrefix, "MSG: Axis_StepDir, ");
+  axisPrefix[9] = '0' + axisNumber;
   this->axisNumber = axisNumber;
   this->Pins = Pins;
 
@@ -170,8 +170,7 @@ bool StepDirMotor::validateParameters(float param1, float param2, float param3, 
 
 // sets motor enable on/off (if possible)
 void StepDirMotor::enable(bool state) {
-  V(axisPrefix); VF("driver powered ");
-  if (state) { VF("up"); } else { VF("down"); }
+  V(axisPrefix); VF("driver powered "); if (state) { VF("up"); } else { VF("down"); }
 
   if (Pins->enable != OFF && Pins->enable != SHARED) {
     VF(" using pin "); VL(Pins->enable);
@@ -192,11 +191,25 @@ DriverStatus StepDirMotor::getDriverStatus() {
 void StepDirMotor::setFrequencySteps(float frequency) {
 
   // chart acceleration
-  #if DEBUG != OFF && defined(DEBUG_STEPDIR_ACCEL) && DEBUG_STEPDIR_ACCEL != OFF
-    if (axisNumber == DEBUG_STEPDIR) {
+  #if DEBUG != OFF && defined(DEBUG_STEPDIR_ACCEL)
+    if (axisNumber == DEBUG_STEPDIR_ACCEL) {
       static unsigned long t = 0;
       if ((long)(millis() - t) > 100) {
-        DL(frequency);
+        DF("Axis"); D(axisNumber);
+        D(" step frequency "); D(frequency); DL("Hz");
+        t = millis();
+      }
+    }
+  #endif
+
+  // chart motor position
+  #if DEBUG != OFF && defined(DEBUG_STEPDIR_POSITION)
+    if (axisNumber == DEBUG_STEPDIR_POSITION) {
+      static unsigned long t = 0;
+      if ((long)(millis() - t) > 100) {
+        DF("Axis"); D(axisNumber);
+        D(" motor step position "); D(motorSteps);
+        D(" motor target position "); DL(targetSteps);
         t = millis();
       }
     }
@@ -278,7 +291,7 @@ void StepDirMotor::modeSwitch() {
   } else {
     if (microstepModeControl == MMC_TRACKING) {
       noInterrupts();
-      if (!synchronized || (step == -1 && direction == dirRev) || (step == 1 && direction == dirFwd)) {
+      if (!sync || (step == -1 && direction == dirRev) || (step == 1 && direction == dirFwd)) {
         microstepModeControl = MMC_SLEWING_REQUEST;
       }
       interrupts();
@@ -360,7 +373,7 @@ IRAM_ATTR void StepDirMotor::move(const int16_t stepPin) {
   #endif
 
   long lastTargetSteps = targetSteps;
-  if (synchronized && !inBacklash) targetSteps += step;
+  if (sync && !inBacklash) targetSteps += step;
 
   if (motorSteps > targetSteps || (inBacklash && direction == dirRev)) {
     if (direction != dirRev) {
@@ -432,7 +445,7 @@ IRAM_ATTR void StepDirMotor::moveFF(const int16_t stepPin) {
     if (takeStep) {
   #endif
 
-  if (synchronized) targetSteps += stepSize;
+  if (sync) targetSteps += stepSize;
 
   if (motorSteps < targetSteps) {
     motorSteps += stepSize;
@@ -460,7 +473,7 @@ IRAM_ATTR void StepDirMotor::moveFR(const int16_t stepPin) {
     if (takeStep) {
   #endif
 
-  if (synchronized) targetSteps -= stepSize;
+  if (sync) targetSteps -= stepSize;
 
   if (motorSteps > targetSteps) {
     motorSteps -= stepSize;

@@ -32,7 +32,7 @@
     #define B_PIN0             33  // Shift
     #endif
     #ifndef B_PIN1
-    #define B_PIN1             25   // N
+    #define B_PIN1             25  // N
     #endif
     #ifndef B_PIN2
     #define B_PIN2             32  // S
@@ -78,10 +78,5 @@
   #endif
   #ifndef DISPLAY_SCK_PIN
     #define DISPLAY_SCK_PIN    -1  // SPI display clock pin for (ignored for hardware SPI connections)
-  #endif
-
-  #if ENCODER_SLEW_CONTROL == ON
-    #define SLEW_ENCODER_A_PIN 26
-    #define SLEW_ENCODER_B_PIN 27
   #endif
 #endif

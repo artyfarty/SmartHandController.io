@@ -25,11 +25,12 @@
 #define DISPLAY_ROTATION          U8G2_R0 // U8G2_R0 Display rotation                                         
 
 // SERIAL PORTS --------------------------------------------------------------------------------------------------------------------
-#define SERIAL_ONSTEP          SERIAL_ST4 // .._ST4, SERIAL_ST4 for ST4 port sync comms, you can also use any other available Infreq
-                                          //         serial port (if pins are unused,) Serial3 on the Teensy3.2 or SERIAL_IP
-                                          //         for example.  This is the serial interface connected to OnStep.
+#define SERIAL_ONSTEP          SERIAL_ST4 // .._ST4, Allow SERIAL_ST4 OnStep connections using its ST4 port synchronous       Infreq
+                                          //         communications mode.  Or, use Serial/Serial1/etc. for standard
+                                          //         asynchronous serial communications.  Or, use OFF to disable.
 #define SERIAL_ONSTEP_BAUD_DEFAULT   9600 //   9600, Common baud rates for these parameters are 9600,19200,57600,115200.      Infreq
-                                          //         Only used for async serial communication with OnStep.
+                                          //         Only used for asynchronous serial communication with OnStep.
+#define SERIAL_RADIO                  OFF //    OFF, Allow BLUETOOTH, WIFI_STATION, or BOTH OnStep connections (ESP32 only.)  Option
 
 // USER FEEDBACK -------------------------------------------------------------------------------------------------------------------
 #define UTILITY_LIGHT                 OFF //    OFF, n. Where n=0..255 (0..100%) activates feature sets default brightness.   Adjust
@@ -50,7 +51,7 @@
 
 // ST4 AUXILIARY INTERFACE ---------------------------------------------------------------------------------------------------------
 // *** It is up to you to verify the interface meets the electrical specifications of any connected device, use at your own risk ***
-#define ST4_AUX_INTERFACE             OFF //    OFF, ON, ON_PULLUP enables auxillary "pass-through" ST4 interface.            Option
+#define ST4_AUX_INTERFACE             OFF //    OFF, ON enables auxillary "pass-through" ST4 interface.                       Option
 
 // CATALOGS ------------------------------------------------------------------------------------------------------------------------
 // Advanced users can also customize which celestial object catalogs are included or even add new catalogs using Config.catalogs.h
