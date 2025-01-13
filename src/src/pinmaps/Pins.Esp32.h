@@ -32,7 +32,7 @@
     #define B_PIN0             33  // Shift
     #endif
     #ifndef B_PIN1
-    #define B_PIN1             25   // N
+    #define B_PIN1             25  // N
     #endif
     #ifndef B_PIN2
     #define B_PIN2             32  // S

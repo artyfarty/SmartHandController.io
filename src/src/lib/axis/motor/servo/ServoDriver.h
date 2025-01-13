@@ -13,33 +13,64 @@
 #ifndef ANALOG_WRITE_RANGE
   #define ANALOG_WRITE_RANGE 255
 #endif
+#ifndef SERVO_ANALOG_WRITE_RANGE
+  #define SERVO_ANALOG_WRITE_RANGE ANALOG_WRITE_RANGE
+#endif
 
 #ifndef AXIS1_SERVO_VELOCITY_FACTOR
-  #define AXIS1_SERVO_VELOCITY_FACTOR 0
+  #define AXIS1_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS2_SERVO_VELOCITY_FACTOR
-  #define AXIS2_SERVO_VELOCITY_FACTOR 0
+  #define AXIS2_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS3_SERVO_VELOCITY_FACTOR
-  #define AXIS3_SERVO_VELOCITY_FACTOR 0
+  #define AXIS3_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS4_SERVO_VELOCITY_FACTOR
-  #define AXIS4_SERVO_VELOCITY_FACTOR 0
+  #define AXIS4_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS5_SERVO_VELOCITY_FACTOR
-  #define AXIS5_SERVO_VELOCITY_FACTOR 0
+  #define AXIS5_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS6_SERVO_VELOCITY_FACTOR
-  #define AXIS6_SERVO_VELOCITY_FACTOR 0
+  #define AXIS6_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS7_SERVO_VELOCITY_FACTOR
-  #define AXIS7_SERVO_VELOCITY_FACTOR 0
+  #define AXIS7_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS8_SERVO_VELOCITY_FACTOR
-  #define AXIS8_SERVO_VELOCITY_FACTOR 0
+  #define AXIS8_SERVO_VELOCITY_FACTOR 0.0F
 #endif
 #ifndef AXIS9_SERVO_VELOCITY_FACTOR
-  #define AXIS9_SERVO_VELOCITY_FACTOR 0
+  #define AXIS9_SERVO_VELOCITY_FACTOR 0.0F
+#endif
+
+#ifndef AXIS1_SERVO_VELOCITY_SCALE
+  #define AXIS1_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS2_SERVO_VELOCITY_SCALE
+  #define AXIS2_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS3_SERVO_VELOCITY_SCALE
+  #define AXIS3_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS4_SERVO_VELOCITY_SCALE
+  #define AXIS4_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS5_SERVO_VELOCITY_SCALE
+  #define AXIS5_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS6_SERVO_VELOCITY_SCALE
+  #define AXIS6_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS7_SERVO_VELOCITY_SCALE
+  #define AXIS7_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS8_SERVO_VELOCITY_SCALE
+  #define AXIS8_SERVO_VELOCITY_SCALE 1.0F
+#endif
+#ifndef AXIS9_SERVO_VELOCITY_SCALE
+  #define AXIS9_SERVO_VELOCITY_SCALE 1.0F
 #endif
 
 class ServoDriver {
@@ -74,7 +105,7 @@ class ServoDriver {
     // calibrate the motor if required
     virtual void calibrateDriver() {}
 
-    // return the velocity estimate factor
+    // return the velocity estimate
     virtual float getVelocityEstimate(float frequency) {
       UNUSED(frequency);
       switch (axisNumber) {
@@ -91,8 +122,28 @@ class ServoDriver {
       }
     }
 
+    // return the velocity scale factor
+    virtual float getVelocityScale() {
+      switch (axisNumber) {
+        case 1: return AXIS1_SERVO_VELOCITY_SCALE;
+        case 2: return AXIS2_SERVO_VELOCITY_SCALE;
+        case 3: return AXIS3_SERVO_VELOCITY_SCALE;
+        case 4: return AXIS4_SERVO_VELOCITY_SCALE;
+        case 5: return AXIS5_SERVO_VELOCITY_SCALE;
+        case 6: return AXIS6_SERVO_VELOCITY_SCALE;
+        case 7: return AXIS7_SERVO_VELOCITY_SCALE;
+        case 8: return AXIS8_SERVO_VELOCITY_SCALE;
+        case 9: return AXIS9_SERVO_VELOCITY_SCALE;
+        default: return 0;
+      }
+    }
+
   protected:
     int axisNumber;
+
+    char axisPrefix[36]; // prefix for debug messages
+    char axisPrefixWarn[36]; // additional prefix for debug messages
+
     DriverStatus status = { false, {false, false}, {false, false}, false, false, false, false };
     #if DEBUG != OFF
       DriverStatus lastStatus = {false, {false, false}, {false, false}, false, false, false, false};
@@ -102,7 +153,8 @@ class ServoDriver {
     int16_t model = OFF;
     int16_t statusMode = OFF;
 
-    float velocityMax = ANALOG_WRITE_RANGE;
+    float velocityMax = SERVO_ANALOG_WRITE_RANGE;
+
     Direction motorDirection = DIR_FORWARD;
 
     int16_t enablePin = OFF;

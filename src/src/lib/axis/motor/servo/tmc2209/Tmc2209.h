@@ -13,6 +13,10 @@
   #define DRIVER_TMC_STEPPER_AUTOGRAD true
 #endif
 
+#ifndef TMC2209_RSENSE
+  #define TMC2209_RSENSE 0.11F
+#endif
+
 // default settings for any TMC UART drivers that may be present
 #ifndef SERIAL_TMC
   #define SERIAL_TMC                  SoftSerial     // Use software serial w/ TX on M3 (CS) and RX on M4 (MISO) of each axis
@@ -44,9 +48,12 @@ typedef struct ServoTmcSettings {
   int16_t model;
   int8_t  status;
   int32_t velocityMax;   // maximum velocity in steps/second
+  int32_t velocityThrs;  // velocity for stealthChop to spreadCycle switch in steps/second
   int32_t acceleration;  // acceleration steps/second/second
   int16_t microsteps;
-  int16_t current;
+  int16_t current;       // peak current in mA
+  int8_t  decay;
+  int8_t  decaySlewing;
 } ServoTmcSettings;
 
 class ServoTmc2209 : public ServoDriver {
@@ -75,13 +82,9 @@ class ServoTmc2209 : public ServoDriver {
     const ServoTmcSettings *Settings;
 
   private:
-    inline float mAToCs(float mA) { return 32.0F*(((mA/1000.0F)*(rSense+0.02F))/0.325F) - 1.0F; }
     float rSense = 0.11F;
 
-    bool stealthChop() { 
-      if ((axisNumber == 1 && AXIS1_DRIVER_DECAY == AXIS1_DRIVER_DECAY_GOTO && AXIS1_DRIVER_DECAY == STEALTHCHOP) ||
-         (axisNumber == 2 && AXIS2_DRIVER_DECAY == AXIS2_DRIVER_DECAY_GOTO && AXIS2_DRIVER_DECAY == STEALTHCHOP)) return true; else return false;
-    }
+    bool stealthChop() { if (decay == STEALTHCHOP) return true; else return false; }
 
     #if SERIAL_TMC == SoftSerial
       SoftwareSerial SerialTMC;
@@ -89,6 +92,10 @@ class ServoTmc2209 : public ServoDriver {
 
     TMC2209Stepper *driver;
 
+    int16_t currentRms;
+    int16_t decay;
+    int16_t decaySlewing;
+    int16_t velocityThrs;
     bool powered = false;
     bool sdMode = false;
     float currentVelocity = 0.0F;

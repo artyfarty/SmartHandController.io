@@ -1,7 +1,7 @@
 /*
 * Title       Smart Hand Controller (based on TeenAstro)
 *
-* Copyright (C) 2018 to 2023 Charles Lemaire, Howard Dutton, and Others
+* Copyright (C) 2018 to 2025 Charles Lemaire, Howard Dutton, and Others
 *
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -29,17 +29,19 @@
 
 #define Product               "SHC"
 #define FirmwareVersionMajor  "4"
-#define FirmwareVersionMinor  "00"
-#define FirmwareVersionPatch  "f"
-
-#include <Arduino.h>
+#define FirmwareVersionMinor  "02"
+#define FirmwareVersionPatch  "n"
 
 #include "src/Common.h"
-NVS nv;
+#include "src/Validate.h"
+
+#include "src/lib/nv/Nv.h"
 #include "src/lib/tasks/OnTask.h"
 #include "src/lib/convert/Convert.h"
-#include "src/userInterface/UserInterface.h"
+
 #include "src/libApp/weather/Weather.h"
+
+#include "src/userInterface/UserInterface.h"
 
 #if DEBUG == PROFILER
   extern void profiler();
@@ -50,7 +52,7 @@ const int pin[7] = {B_PIN0, B_PIN1, B_PIN2, B_PIN3, B_PIN4, B_PIN5, B_PIN6};
 const int active[7] = {B_PIN0_ACTIVE_STATE, B_PIN1_ACTIVE_STATE, B_PIN2_ACTIVE_STATE, B_PIN3_ACTIVE_STATE, B_PIN4_ACTIVE_STATE, B_PIN5_ACTIVE_STATE, B_PIN6_ACTIVE_STATE};
 
 void systemServices() {
-  nv.poll();
+  nv.poll(false);
 }
 
 #if WEATHER != OFF
@@ -59,9 +61,9 @@ void systemServices() {
     char command[80];
 
     switch (i++ % 3) {
-      case 0: sprintF(command, ":SX9A,%0.1f#", weather.getTemperature()); onStep.Set(command); break;
-      case 1: sprintF(command, ":SX9B,%0.1f#", weather.getPressure()); onStep.Set(command); break;
-      case 2: sprintF(command, ":SX9C,%0.1f#", weather.getHumidity()); onStep.Set(command); break;
+      case 0: sprintF(command, ":SX9A,%0.1f#", weather.getTemperature()); onStepLx200.Set(command); break;
+      case 1: sprintF(command, ":SX9B,%0.1f#", weather.getPressure()); onStepLx200.Set(command); break;
+      case 2: sprintF(command, ":SX9C,%0.1f#", weather.getHumidity()); onStepLx200.Set(command); break;
     }
   }
 #endif
@@ -76,12 +78,15 @@ void setup(void) {
   VF("MSG: MCU = "); VLF(MCU_STR);
   
   HAL_INIT();
-  HAL_NV_INIT();
-  
+  if (!nv.init()) {
+    DLF("WRN: Setup, NV (EEPROM/FRAM/Flash/etc.) device not found!");
+    nv.initError = true;
+  }
+ 
   // System services
   // add task for system services, runs at 10ms intervals so commiting 1KB of NV takes about 10 seconds
   VF("MSG: Setup, starting system services task (rate 10ms priority 7)... ");
-  if (tasks.add(10, 0, true, 7, systemServices, "SysSvcs")) { VL("success"); } else { VL("FAILED!"); }
+  if (tasks.add(10, 0, true, 5, systemServices, "SysSvcs")) { VL("success"); } else { VL("FAILED!"); }
 
   userInterface.init(Version, pin, active, SERIAL_ONSTEP_BAUD_DEFAULT, static_cast<OLED>(DISPLAY_OLED));
 
