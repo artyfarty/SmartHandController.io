@@ -24,41 +24,97 @@ void keyPadWrapper() { keyPad.poll(); }
   void auxST4Wrapper() { auxST4.poll(); }
 #endif
 
-void UI::init(const char version[], const int pin[7], const int active[7], const int SerialBaud, const OLED model) {
+void UI::init(const char version[], const KeyPad::Pin pins[7], const int SerialBaud, const OLED model) {
   serialBaud = SerialBaud;
 
-  // get nv ready
-  if (!nv.isKeyValid(INIT_NV_KEY)) {
-    VF("MSG: NV, invalid key wipe "); V(nv.size); VLF(" bytes");
-    if (nv.verify()) { VLF("MSG: NV, ready for reset to defaults"); }
-  } else { VLF("MSG: NV, correct key found"); }
+  // --------------------------------------------------------------------------------------------------
+  // start the NV/EEPROM subsystem for settings storage
+  bool initErrorNv = false;
+  bool success = nv().init();
+  NvVolume &nvVolume = nv().volume();
+
+  if (success) {
+    success = (nvVolume.mount("SHC", NV_VOLUME_SIGNATURE) == NvVolume::Status::Ok);
+    VF("MSG: Nv, volume ");
+    if (success) { VLF("'SHC' mounted"); } else { VLF("invalid/unformatted"); }
+
+    if (!success) {
+
+      // automatic kv partition sizing
+      uint32_t vSize = nvVolume.byteCount() - 32;
+      uint32_t kvSize = vSize;
+      if (vSize > 1039) {
+
+        // start the volume format
+        success = nvVolume.formatBegin("SHC", NV_VOLUME_SIGNATURE) == NvVolume::Status::Ok;
+        if (success) { VF("MSG: Nv, volume 'SHC' format started ("); V(vSize); VLF(" bytes)"); }
+
+        // add the KV partition
+        success = success && nvVolume.formatAddPartition("KV", kvSize);
+        if (success) { VF("MSG: Nv, volume format added 'KV' partition ("); V(kvSize); VLF(" bytes)"); }
+
+        // finally commit the volume format
+        success = success && (nvVolume.formatCommit() == NvVolume::Status::Ok);
+        if (success) { VLF("MSG: Nv, volume format done"); }
+
+        // try to mount the volume again
+        success = success && (nvVolume.mount("SHC", NV_VOLUME_SIGNATURE) == NvVolume::Status::Ok);
+        if (success) { VLF("MSG: Nv, volume 'SHC' mounted"); } else { DLF("WRN: Nv, volume 'SWS' mount FAILED!"); }
+
+      } else {
+        DLF("WRN: Nv, volume compatible storage device NOT FOUND!");
+        success = false;
+      }
+    }
+
+    // Bind global KV instance to the KV partition index
+    success = success && (nv().kv().init(nvVolume, "KV") == KvPartition::Status::Ok);
+    if (success) { VLF("MSG: Nv, partition 'KV' mounted"); } else { DLF("WRN: Nv, partition 'KV' mount FAILED!"); }
+  } else {
+    DLF("WRN: Nv, backend init FAILED!");
+  }
+
+  if (!success) {
+    VLF("WRN: Nv, init FAILED!");
+    initErrorNv = true;
+  }
+
+  nv().kv().resetInitErrorFlag();
+  // --------------------------------------------------------------------------------------------------
 
   // get wireless ready
   #if SERIAL_IP_MODE != OFF
     wifiManager.readSettings();
   #endif
   #if SERIAL_BT_MODE != OFF
-    SERIAL_BT.begin(SERIAL_BT_NAME, true);
-    bluetoothManager.init();
+    bluetoothManager.readSettings();
   #endif
 
-  // confirm the data structure size
-  if (DisplaySettingsSize < sizeof(DisplaySettings)) { nv.initError = true; DL("ERR: UserInterface::setup(); DisplaySettingsSize error NV subsystem writes disabled"); }
+  if (!nv().kv().getOrInit("DISPLAY_SETTINGS", displaySettings)) { DLF("WRN: init failed for DISPLAY_SETTINGS"); }
 
-  // write the default settings to NV
-  if (!nv.hasValidKey()) {
-    VLF("MSG: UserInterface, writing defaults to NV");
-    nv.writeBytes(NV_DISPLAY_SETTINGS_BASE, &displaySettings, sizeof(DisplaySettings));
-  }
+  // --------------------------------------------------------------------------------------------------
+  // init is done let the user see what's in the KV
+  #if DEBUG != OFF
+    KvPartition::Stats stats;
+    if (success && nv().kv().stats(stats) == KvPartition::Status::Ok) {
+      VF("MSG: Nv, partition 'KV' data blocks used = ");
+      V(stats.dataBlocksTotal - stats.dataBlocksFree); VF(" (of "); V(stats.dataBlocksTotal); VF(")");
+      VF(" key slots used = ");
+      V(stats.slotsTotal - stats.slotsFree); VF(" (of "); V(stats.slotsTotal); VLF(")");
+    }
+  #endif
 
-  // read the settings
-  nv.readBytes(NV_DISPLAY_SETTINGS_BASE, &displaySettings, sizeof(DisplaySettings));
+  // and capture any errors
+  if (nv().kv().getInitErrorFlag()) initErrorNv = true;
+  UNUSED(initErrorNv);
+  // --------------------------------------------------------------------------------------------------
 
-  // init is done, write the NV key if necessary
-  if (!nv.hasValidKey()) {
-    nv.writeKey((uint32_t)INIT_NV_KEY);
-    nv.wait();
-    if (!nv.isKeyValid(INIT_NV_KEY)) { DLF("ERR: NV, failed to read back key!"); } else { VLF("MSG: NV, reset complete"); }
+  connectionSelection = CS_NONE;
+  if (!nv().kv().getOrInit("SERIAL_BOOT_FLAG", connectionSelection)) { DLF("WRN: init failed for SERIAL_BOOT_FLAG"); };
+
+  if (connectionSelection != CS_NONE) {
+    VF("MSG: UserInterface, direct boot flag set to "); VL((int)connectionSelection);
+    nv().kv().put("SERIAL_BOOT_FLAG", (uint8_t)CS_NONE);
   }
 
   if (strlen(version) <= 19) strcpy(_version, version);
@@ -70,9 +126,9 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
     delay(100);
     int thresholdEW = analogRead(B_PIN1);
     int thresholdNS = analogRead(B_PIN3);
-    keyPad.init(pin, active, thresholdNS, thresholdEW);
+    keyPad.init(pins, thresholdNS, thresholdEW);
   #else
-    keyPad.init(pin, active, 0, 0);
+    keyPad.init(pins, 0, 0);
   #endif
   VF("MSG: UserInterface, start KeyPad monitor task (rate 10ms priority 1)... ");
   if (tasks.add(10, 0, true, 1, keyPadWrapper, "Keypad")) { VLF("success"); } else { VLF("FAILED!"); }
@@ -109,25 +165,37 @@ void UI::init(const char version[], const int pin[7], const int active[7], const
   if (model == OLED_SSD1309_4W_HW_SPI) display = new U8G2_EXT_SSD1309_128X64_NONAME_F_4W_HW_SPI(DISPLAY_ROTATION);
 
   display->begin();
-  display->setContrast(displaySettings.maxContrastSelection);
   display->setFont(LF_STANDARD);
   message.init(display);
+  display->setContrast(UI::Contrast[displaySettings.maxContrastSelection]);
 
   // display the splash screen
-  drawIntro();
-  delay(2000);
+  if (connectionSelection == CS_NONE) {
+    drawIntro();
+    delay(2000);
+  }
 
   VF("MSG: UserInterface, start UI update task (rate 30ms priority 6)... ");
   if (tasks.add(30, 0, true, 6, updateWrapper, "UIupd")) { VLF("success"); } else { VLF("FAILED!"); }
 }
 void UI::poll() {
   // -----------------------------------------------------------------------------------------------------
+  // deep sleep
+  #ifdef DEEP_SLEEP_WAKEUP_PIN
+    if (keyPad.s->isDown() && keyPad.shift->isDown()) {
+      VLF("MSG: Entering deep sleep...");
+      esp_deep_sleep_enable_gpio_wakeup(BIT(DEEP_SLEEP_WAKEUP_PIN), ESP_GPIO_WAKEUP_GPIO_LOW);
+      message.show(L_POWERING, L_OFF "...", 1000);
+	  esp_deep_sleep_start();   
+    }
+  #endif
+
+  // -----------------------------------------------------------------------------------------------------
   // connect/reconnect
   static unsigned long lastConnectedTime = 0;
   if (!status.connected && (long)(millis() - lastConnectedTime) > 2000) {
     if (!firstConnect) message.show(L_LOST_MSG, L_CONNECTION, 1000);
     connect();
-    firstConnect = false;
     reconnectionCount++;
   } else lastConnectedTime = millis();
 
@@ -311,9 +379,9 @@ void UI::poll() {
         float rpos = status.getRotatorPosition();
         if (!isnan(rpos)) {
           char temp[24];
-          if (rotState == RS_CCW_SLOW || rotState == RS_CCW_MID || rotState == RS_CCW_FAST) sprintf(temp, L_ROTATE " < %d°", (int)round(rpos)); else
-          if (rotState == RS_CW_SLOW || rotState == RS_CW_MID || rotState == RS_CW_FAST) sprintf(temp, L_ROTATE " > %d°", (int)round(rpos)); else
-          sprintf(temp, L_ROTATE "    %d°", (int)round(rpos));
+          if (rotState == RS_CCW_SLOW || rotState == RS_CCW_MID || rotState == RS_CCW_FAST) snprintf(temp, sizeof(temp), L_ROTATE " < %d°", (int)round(rpos)); else
+          if (rotState == RS_CW_SLOW || rotState == RS_CW_MID || rotState == RS_CW_FAST) snprintf(temp, sizeof(temp), L_ROTATE " > %d°", (int)round(rpos)); else
+          snprintf(temp, sizeof(temp), L_ROTATE "    %d°", (int)round(rpos));
           message.brief(temp);
         } else message.brief("?");
       }
@@ -336,6 +404,18 @@ void UI::poll() {
         else if (focusState == FS_IN_MID  && keyPad.f->isDown() && keyPad.f->timeDown() > 6000) { focusState = FS_IN_FAST;  onStepLx200.SetF(":F4#:F-#"); }
         else if (focusState == FS_IN_SLOW  && keyPad.f->isDown() && keyPad.f->timeDown() > 3000) { focusState = FS_IN_MID;  onStepLx200.SetF(":F2#:F-#"); }
       #endif
+      if (focusState > FS_STOPPED) nextFocuserMessageUpdateCycles = 120;
+      if (nextFocuserMessageUpdateCycles > 0) {
+        nextFocuserMessageUpdateCycles--;
+        float fpos = status.getFocuserPosition();
+        if (!isnan(fpos)) {
+          char temp[24];
+          if (focusState == FS_OUT_SLOW || focusState == FS_OUT_MID || focusState == FS_OUT_FAST) snprintf(temp, sizeof(temp), L_FOCUS " \\/ %dum", (int)round(fpos)); else
+          if (focusState == FS_IN_SLOW || focusState == FS_IN_MID || focusState == FS_IN_FAST) snprintf(temp, sizeof(temp), L_FOCUS " /\\ %dum", (int)round(fpos)); else
+          snprintf(temp, sizeof(temp), L_FOCUS "    %dum", (int)round(fpos));
+          message.brief(temp);
+        } else message.brief("?");
+      }
     break;
 
     // auxiliary features
@@ -349,14 +429,14 @@ void UI::poll() {
             // ANALOG_OUT but in units of 5%
             int v = lround(status.featureValue1()/12.75F) - 2;
             if (v < 0) v = 0;
-            sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, (int)lround(v*12.75F));
+            snprintf(cmd, sizeof(cmd), ":SXX%i,V%i#", featureKeyMode - 11, (int)lround(v*12.75F));
             onStepLx200.Set(cmd);
-            sprintf(line2, "%i%%", v*5);
+            snprintf(line2, sizeof(line2), "%i%%", v*5);
             message.show(status.featureName(), line2, 1000);
           } else {
-            sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, 0);
+            snprintf(cmd, sizeof(cmd), ":SXX%i,V%i#", featureKeyMode - 11, 0);
             onStepLx200.Set(cmd);
-            sprintf(line2, "%s", L_OFF);
+            snprintf(line2, sizeof(line2), "%s", L_OFF);
             message.show(status.featureName(), line2, 1000);
           }
         } else
@@ -365,14 +445,14 @@ void UI::poll() {
             status.featureUpdate(featureKeyMode - 11);
             int v = lround(status.featureValue1()/12.75F) + 2;
             if (v > 20) v = 20;
-            sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, (int)lround(v*12.75F));
+            snprintf(cmd, sizeof(cmd), ":SXX%i,V%i#", featureKeyMode - 11, (int)lround(v*12.75F));
             onStepLx200.Set(cmd);
-            sprintf(line2, "%i%%", v*5);
+            snprintf(line2, sizeof(line2), "%i%%", v*5);
             message.show(status.featureName(), line2, 1000);
           } else {
-            sprintf(cmd, ":SXX%i,V%i#", featureKeyMode - 11, 1);
+            snprintf(cmd, sizeof(cmd), ":SXX%i,V%i#", featureKeyMode - 11, 1);
             onStepLx200.Set(cmd);
-            sprintf(line2, "%s",  L_ON);
+            snprintf(line2, sizeof(line2), "%s",  L_ON);
             message.show(status.featureName(), line2, 1000);
           }
         }
@@ -483,7 +563,19 @@ void UI::updateMainDisplay(u8g2_uint_t page) {
       Status::ParkState curP = status.getParkState();
       Status::TrackState curT = status.getTrackingState();
       Status::TrackRate curTR = status.getTrackingRate();
-    
+
+      #ifdef BATTERY_VOLTAGE_PIN
+        static float batteryVoltage = 3.7F;
+        float v = analogReadMilliVolts(BATTERY_VOLTAGE_PIN)/1000.0F;
+        if (BATTERY_VOLTAGE_FORMULA(v) < 5.0F) batteryVoltage = (batteryVoltage*9.0F + BATTERY_VOLTAGE_FORMULA(v))/10.0F;
+
+        if (batteryVoltage < BATTERY_VOLTAGE_0) { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, battery_0_percent_bits); x -= icon_narrow_width + 1; } else
+        if (batteryVoltage < BATTERY_VOLTAGE_25) { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, battery_25_percent_bits); x -= icon_narrow_width + 1; } else
+        if (batteryVoltage < BATTERY_VOLTAGE_50) { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, battery_50_percent_bits); x -= icon_narrow_width + 1; } else
+        if (batteryVoltage < BATTERY_VOLTAGE_75) { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, battery_75_percent_bits); x -= icon_narrow_width + 1; } else
+        { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, battery_100_percent_bits); x -= icon_narrow_width + 1; }
+      #endif
+
       if (curP == Status::PRK_PARKED)  { display->drawXBMP(x - icon_width, 0, icon_width, icon_height, parked_bits); x -= icon_width + 1; } else
       if (curP == Status::PRK_PARKING) { display->drawXBMP(x - icon_width, 0, icon_width, icon_height, parking_bits); x -= icon_width + 1; } else
       if (status.atHome())             { display->drawXBMP(x - icon_width, 0, icon_width, icon_height, home_bits); x -= icon_width + 1;  } else 
@@ -509,8 +601,8 @@ void UI::updateMainDisplay(u8g2_uint_t page) {
         if (curP == Status::PRK_FAILED) { display->drawXBMP(x - icon_width, 0, icon_width, icon_height, parkingFailed_bits); x -= icon_width + 1; }
 
         Status::PierState CurP = status.getPierState();
-        if (CurP == Status::PIER_E) { display->drawXBMP(x - icon_width, 0, icon_width, icon_height, E_bits); x -= icon_width + 1; } else 
-        if (CurP == Status::PIER_W) { display->drawXBMP(x - icon_width, 0, icon_width, icon_height, W_bits); x -= icon_width + 1; }
+        if (CurP == Status::PIER_E) { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, E_bits); x -= icon_narrow_width + 1; } else 
+        if (CurP == Status::PIER_W) { display->drawXBMP(x - icon_narrow_width, 0, icon_narrow_width, icon_height, W_bits); x -= icon_narrow_width + 1; }
 
         if (status.align != Status::ALI_OFF) {
           switch (status.aliMode) {
@@ -536,16 +628,37 @@ void UI::updateMainDisplay(u8g2_uint_t page) {
 
       if (!status.isGuiding()) {
         switch (status.getError()) {
-          case Status::ERR_NONE: break;                                                                                                         // no error
-          case Status::ERR_MOTOR_FAULT: display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrMf_bits);  x -= icon_width + 1; break; // motor fault
-          case Status::ERR_ALT_MIN:     display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAlt_bits); x -= icon_width + 1; break; // above below horizon
-          case Status::ERR_LIMIT_SENSE: display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrLs_bits);  x -= icon_width + 1; break; // physical limit switch triggered
-          case Status::ERR_DEC:         display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrDe_bits);  x -= icon_width + 1; break; // past the rarely used Dec limit
-          case Status::ERR_AZM:         display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAz_bits);  x -= icon_width + 1; break; // for AltAz mounts, past limit in Az
-          case Status::ERR_UNDER_POLE:  display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrUp_bits);  x -= icon_width + 1; break; // for Eq mounts, past limit in HA
-          case Status::ERR_MERIDIAN:    display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrMe_bits);  x -= icon_width + 1; break; // for Eq mounts, past meridian limit
-          case Status::ERR_ALT_MAX:     display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAlt_bits); x -= icon_width + 1; break; // above overhead
-          default:                      display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrOth_bits); x -= icon_width + 1; break; // other error
+          case Status::ERR_NONE: break;
+          case Status::ERR_MOTOR_FAULT: display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrMot_bits);  x -= icon_width + 1; break;
+          case Status::ERR_ALT_MIN:
+            if (status.getOnStepVersion() < 1000)
+              display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAltLowHigh_bits);
+            else
+              display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAltLow_bits);
+            x -= icon_width + 1;
+          break;
+          case Status::ERR_LIMIT_SENSE: display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrLimitSW_bits);  x -= icon_width + 1; break;
+          case Status::ERR_DEC:
+            if (status.isMountFork())
+              display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrDecFork_bits);
+            else
+              display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrDecGEM_bits);
+            x -= icon_width + 1;
+          break;
+          case Status::ERR_AZM:         display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAzmDOB_bits);  x -= icon_width + 1; break;
+          case Status::ERR_UNDER_POLE:
+            if (status.isMountFork())
+              display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrRaFork_bits);
+            else
+              display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrRaGEM_bits);
+            x -= icon_width + 1;
+          break;
+          case Status::ERR_MERIDIAN:    display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrMER_bits);  x -= icon_width + 1; break;
+          case Status::ERR_WEATHER_INIT:display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrWeather_bits);  x -= icon_width + 1; break;
+          case Status::ERR_SITE_INIT:   display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrSite_bits);  x -= icon_width + 1; break;
+          case Status::ERR_NV_INIT:     display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrNV_bits);  x -= icon_width + 1; break;
+          case Status::ERR_ALT_MAX:     display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrAltHigh_bits); x -= icon_width + 1; break;
+          default:                      display->drawXBMP(x - icon_width, 0, icon_width, icon_height, ErrOther_bits); x -= icon_width + 1; break;
         }
       }
     }
@@ -632,19 +745,35 @@ void UI::updateMainDisplay(u8g2_uint_t page) {
         u8g2_uint_t y = 36;
         u8g2_uint_t dx = display->getDisplayWidth();
 
-        dtostrf(T, 3, 1, temp);
-        sprintf(line, "T%s\xb0%s", temp, "C");
+        if (UNITS == IMPERIAL) {
+        dtostrf((T*(9.0/5.0) + 32.0), 2, 0, temp);
+        snprintf(line, sizeof(line), "T%s\xb0%s", temp, "F");
         display->DrawFwNumeric(0, y, line);
 
-        sprintf(line, "P%dmb",(int)round(P));
+        dtostrf((P/33.864), 3, 1, temp); //drew
+        snprintf(line, sizeof(line), "P%s\x22%s", temp, "Hg");
+        }
+        else {
+        dtostrf(T, 3, 1, temp);
+        snprintf(line, sizeof(line), "T%s\xb0%s", temp, "C");
+        display->DrawFwNumeric(0, y, line);
+
+        snprintf(line, sizeof(line), "P%dmb",(int)round(P));
+        }
         display->DrawFwNumeric(dx - display->GetFwNumericWidth(line), y, line);
 
         y += line_height + 4;
-        sprintf(line, "H%d%%", (int)round(H));
+        snprintf(line, sizeof(line), "H%d%%", (int)round(H));
         display->DrawFwNumeric(0, y, line);
 
+        if (UNITS == IMPERIAL) {
+        dtostrf((DP*(9.0/5.0) + 32.0), 3, 1, temp);
+        snprintf(line, sizeof(line), "DP%s\xb0%s", temp, "F");
+        }
+        else {
         dtostrf(DP, 3, 1, temp);
-        sprintf(line, "DP%s\xb0%s", temp, "C");
+        snprintf(line, sizeof(line), "DP%s\xb0%s", temp, "C");
+        }
         display->DrawFwNumeric(dx-display->GetFwNumericWidth(line), y, line);
       }
       
@@ -656,8 +785,8 @@ void UI::updateMainDisplay(u8g2_uint_t page) {
       u8g2_uint_t y = 36;
 
       char txt[20];
-      if ((status.align - 1) % 3 == 1) sprintf(txt, L_SLEWING_TO_STAR " %u", (status.align - 1) / 3 + 1); else
-      if ((status.align - 1) % 3 == 2) sprintf(txt, L_RECENTER_STAR " %u", (status.align - 1) / 3 + 1);
+      if ((status.align - 1) % 3 == 1) snprintf(txt, sizeof(txt), L_SLEWING_TO_STAR " %u", (status.align - 1) / 3 + 1); else
+      if ((status.align - 1) % 3 == 2) snprintf(txt, sizeof(txt), L_RECENTER_STAR " %u", (status.align - 1) / 3 + 1);
       display->drawUTF8(0, y, txt);
 
       y += line_height + 4;
@@ -700,82 +829,116 @@ bool UI::SelectStarAlign() {
 
 void UI::connect() {
 
-initAgain:
-  // count down reconnect attempts
-  if (--skipConnectMenu < 0) skipConnectMenu = 0;
+if (connectionSelection == CS_CONNECT_MENU) connectionSelection = CS_NONE;
+connectAgain:
 
-  if (!skipConnectMenu && !firstConnect) {
-    #if SERIAL_IP_MODE != OFF
-      if (onStep.connectionMode == CM_WIFI) {
-        SERIAL_IP.end();
-        wifiManager.disconnect();
-      }
-    #endif
-    #if SERIAL_BT_MODE != OFF
-      if (onStep.connectionMode == CM_BLUETOOTH) { HAL_RESET(); }
-    #endif
-    #if SERIAL_ONSTEP != OFF
-      if (onStep.connectionMode == CM_SERIAL) SERIAL_ONSTEP.end();
-    #endif
-  }
+  // count down during reconnect attempts
+  if (--skipConnectionSelection < 0) skipConnectionSelection = 0;
+  if (!skipConnectionSelection) {
 
-  #if SERIAL_IP_MODE != OFF || SERIAL_BT_MODE != OFF
-    if (!skipConnectMenu) {
-      bool success;
-      do { success = menuWireless(); } while (!success);
-    }
-  #endif
-
-  #if SERIAL_IP_MODE != OFF
-    if (onStep.connectionMode == CM_WIFI) {
-      if (!wifiManager.active) {
-        bool initSuccess = true;
-        if (firstConnect) {
-          VLF("MSG: Connect, WiFi starting");
-          message.show(L_WIFI_CONNECTION1, wifiManager.sta->ssid, 100);
-        } else {
-          VLF("MSG: Connect, WiFi restarting");
-          message.show(L_WIFI_CONNECTION2, wifiManager.sta->ssid, 100);
-        }
-        delay(500);
-
-        wifiManager.staNameLookup = true;
-        if (!wifiManager.init()) initSuccess = false;
-
-        if (!initSuccess) {
-          VLF("MSG: Connect, WiFi failed");
-          message.show(L_WIFI_CONNECTION2, L_FAILED, 2000);
-          delay(5000);
-          goto initAgain;
-        }
-      }
-
-      message.show(L_CONNECTING, IPAddress(wifiManager.sta->target).toString().c_str(), 1000);
-      if (!SERIAL_IP.begin(serialBaud)) {
-        VLF("MSG: Connect, to target failed");
-        wifiManager.disconnect();
-        delay(2000);
-        message.show(L_CONNECTING, L_FAILED, 2000);
-        goto initAgain;
-      }
-    }
-  #endif
-  #if SERIAL_ONSTEP != OFF
-    if (onStep.connectionMode == CM_SERIAL) {
-      #if defined(SERIAL_ONSTEP_RX) && defined(SERIAL_ONSTEP_TX)
-        SERIAL_ONSTEP.begin(serialBaud, SERIAL_8N1, SERIAL_ONSTEP_RX, SERIAL_ONSTEP_TX);
-      #else
-        SERIAL_ONSTEP.begin(serialBaud);
+    // shutdown any open connection
+    if (!firstConnect) {
+      #if SERIAL_ONSTEP != OFF
+        if (onStep.connectionMode == CM_SERIAL) SERIAL_ONSTEP.end();
       #endif
+
+      #if SERIAL_IP_MODE != OFF
+        if (onStep.connectionMode == CM_WIFI) { SERIAL_IP.end(); wifiManager.disconnect(); }
+      #endif
+
+      if ((onStep.connectionMode == CM_BLUETOOTH) || REBOOT_TO_CONNECT_MENU == ON) {
+        VLF("MSG: Connect, setting boot flag for menu (restarting...)");
+        nv().kv().put("SERIAL_BOOT_FLAG", (uint8_t)CS_CONNECT_MENU);
+        message.show(L_SCANNING, L_PLEASE_WAIT "...", 10);
+        tasks.yield(NV_WAIT + 500);
+        HAL_RESET();
+      }
     }
-  #endif
+
+    #if SERIAL_ONSTEP != OFF && SERIAL_IP_MODE == OFF && SERIAL_BT_MODE == OFF
+      // flag serial only operation
+      connectionSelection = CS_SERIAL;
+    #else
+      // allow the user to make a selection
+      if (connectionSelection == CS_NONE) menuWireless();
+    #endif
+
+    // start the connection
+    #if SERIAL_ONSTEP != OFF
+      if (connectionSelection == CS_SERIAL) {
+        onStep.connectionMode = CM_SERIAL;
+        connectionSelection = CS_NONE;
+
+        #if defined(SERIAL_ONSTEP_RX) && defined(SERIAL_ONSTEP_TX)
+          SERIAL_ONSTEP.begin(serialBaud, SERIAL_8N1, SERIAL_ONSTEP_RX, SERIAL_ONSTEP_TX);
+        #else
+          SERIAL_ONSTEP.begin(serialBaud);
+        #endif
+      }
+    #endif
+
+    #if SERIAL_IP_MODE != OFF
+      if (connectionSelection >= CS_WIFI_STA1 && connectionSelection <= CS_WIFI_STA6) {
+        wifiManager.setStation((connectionSelection - (int)CS_WIFI_STA1) + 1);
+        onStep.connectionMode = CM_WIFI;
+        connectionSelection = CS_NONE;
+
+        if (!wifiManager.active) {
+          VLF("MSG: Connect, WiFi starting");
+          message.show(L_WIFI_CONNECTION, wifiManager.sta->ssid, 100);
+          delay(500);
+
+          wifiManager.staNameLookup = true;
+          if (!wifiManager.init()) {
+            VLF("MSG: Connect, WiFi start failed");
+            message.show(L_WIFI_CONNECTION, L_FAILED, 2000);
+            delay(5000);
+            goto connectAgain;
+          }
+        }
+
+        message.show(L_CONNECTING, IPAddress(wifiManager.sta->target).toString().c_str(), 1000);
+        if (!SERIAL_IP.begin(serialBaud)) {
+          VLF("MSG: Connect, to target failed");
+          wifiManager.disconnect();
+          delay(2000);
+          message.show(L_CONNECTING, L_FAILED, 2000);
+          goto connectAgain;
+        }
+      }
+    #endif
+
+    #if SERIAL_BT_MODE != OFF
+      if (connectionSelection >= CS_BT_STA1 && connectionSelection <= CS_BT_STA6) {
+        bluetoothManager.setStation((connectionSelection - (int)CS_BT_STA1) + 1);
+        onStep.connectionMode = CM_BLUETOOTH;
+        connectionSelection = CS_NONE;
+
+        if (!bluetoothManager.active) {
+          VLF("MSG: Connect, Bluetooth starting");
+          message.show(L_BT_CONNECTION, bluetoothManager.sta->address, 100);
+          delay(500);
+
+          SERIAL_BT.begin(SERIAL_BT_NAME, true);
+
+          if (!bluetoothManager.init()) {
+            VLF("MSG: Connect, Bluetooth start failed");
+            message.show(L_BT_CONNECTION, L_FAILED, 2000);
+            delay(5000);
+            goto connectAgain;
+          }
+        }
+      }
+    #endif
+
+    firstConnect = false;
+  }
 
   VLF("MSG: Connect, looking for OnStep...");
 
-  onStepContactTry = 0;
-
-queryAgain:
-  if (onStepContactTry % 1 == 0) message.show(L_LOOKING, "OnStep", 500); else message.show(L_LOOKING, "...", 500);
+  queryTry = 0;
+queryOnStep:
+  if (queryTry % 1 == 0) message.show(L_LOOKING, "OnStep", 500); else message.show(L_LOOKING, "...", 500);
 
   for (int i = 0; i < 3; i++) {
     delay(100);
@@ -793,7 +956,7 @@ queryAgain:
   char s[80] = "";
   CMD_RESULT r = onStepLx200.Get(":GVP#", s);
   if (r != CR_VALUE_GET || !strstr(s, "On-Step")) {
-    if (++onStepContactTry < 3) goto queryAgain;
+    if (++queryTry < 3) goto queryOnStep;
 
     #if SERIAL_IP_MODE != OFF
       if (onStep.connectionMode == CM_WIFI) {
@@ -807,31 +970,33 @@ queryAgain:
 
     delay(1000);
 
-    goto initAgain;
+    goto connectAgain;
   }
 
-  VLF("MSG: Connect, found OnStep");
+  onStepLx200.Get(":GVN#", s);
+
+  VF("MSG: Connect, found OnStep "); VL(s);
 
   initGuideCommands();
 
   #if SERIAL_IP_MODE != OFF
-    if (onStep.connectionMode == CM_WIFI) skipConnectMenu = 3;
+    if (onStep.connectionMode == CM_WIFI) skipConnectionSelection = 3;
   #endif
   #if SERIAL_BT_MODE != OFF
-    if (onStep.connectionMode == CM_BLUETOOTH) skipConnectMenu = 2;
+    if (onStep.connectionMode == CM_BLUETOOTH) skipConnectionSelection = 2;
   #endif
   #if SERIAL_ONSTEP != OFF
-    if (onStep.connectionMode == CM_SERIAL) skipConnectMenu = 2;
+    if (onStep.connectionMode == CM_SERIAL) skipConnectionSelection = 2;
   #endif
 
-again2:
+  queryTry = 0;
+queryCoordinateSystem:
   delay(500);
 
   // OnStep coordinate mode for getting and setting RA/Dec
   // 0 = OBSERVED_PLACE (same as not supported)
   // 1 = TOPOCENTRIC (does refraction)
   // 2 = ASTROMETRIC_J2000 (does refraction and precession/nutation)
-  onStepContactTry = 0;
   if (onStepLx200.Get(":GXEE#", s) == CR_VALUE_GET && s[0] >= '0' && s[0] <= '3' && s[1] == 0) {
     if (s[0] == '0') {
       VLF("MSG: Connect, coords Observed Place");
@@ -849,8 +1014,8 @@ again2:
       message.show(L_CONNECTION, L_OK "!", 500);
     }
   } else {
-    if (++onStepContactTry <= 3) goto again2;
-    VLF("WRN: Connect, get coords failed");
+    if (++queryTry <= 3) goto queryCoordinateSystem;
+    DLF("WRN: Connect, get coords failed");
     VLF("MSG: Connect, fallback Observed Place");
     telescopeCoordinates = OBSERVED_PLACE;
     message.show(L_CONNECTION, L_WARNING "!", 1000);

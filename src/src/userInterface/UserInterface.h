@@ -15,6 +15,7 @@
 #define ASTROMETRIC_J2000 3
 
 #define MY_BORDER_SIZE 1
+#define icon_narrow_width 8
 #define icon_width 16
 #define icon_height 16
 
@@ -22,6 +23,11 @@
 #define onstep_logo_height 68
 
 enum OperatingMode {OM_SERIAL, OM_WIFI};
+enum ConnectSelection : uint8_t {
+  CS_NONE, CS_CONNECT_MENU, CS_SERIAL,
+  CS_WIFI_STA1, CS_WIFI_STA2, CS_WIFI_STA3, CS_WIFI_STA4, CS_WIFI_STA5, CS_WIFI_STA6,
+  CS_BT_STA1, CS_BT_STA2, CS_BT_STA3, CS_BT_STA4, CS_BT_STA5, CS_BT_STA6
+};
 
 enum OLED { OLED_SH1106, OLED_SH1106_4W_SW_SPI, OLED_SH1106_4W_HW_SPI, OLED_SSD1306, OLED_SSD1309, OLED_SSD1309_4W_SW_SPI, OLED_SSD1309_4W_HW_SPI };
 #define SH1106 OLED_SH1106
@@ -48,7 +54,7 @@ typedef struct DisplaySettings {
 
 class UI {
 public:
-  void init(const char version[], const int pin[7], const int active[7], const int SerialBaud, const OLED model);
+  void init(const char version[], const KeyPad::Pin pins[7], const int SerialBaud, const OLED model);
 
   void connect();
   void drawIntro();
@@ -68,7 +74,7 @@ private:
   void menuMain();
   void menuFeatureKey();
   #if SERIAL_IP_MODE != OFF || SERIAL_BT_MODE != OFF
-    bool menuWireless();
+    void menuWireless();
     void menuWiFiStationEditSelect(const char *ssid);
     void menuWiFiStationEdit(const char *ssid, int index);
     void menuBTStationEditSelect(const char *name, const char *address);
@@ -147,8 +153,9 @@ private:
     bool bluetoothStarted = false;
   #endif
   bool firstConnect = true;
-  int skipConnectMenu = 1;
-  int onStepContactTry;
+  ConnectSelection connectionSelection = CS_NONE;
+  int skipConnectionSelection = 1;
+  int queryTry;
   bool hasAuxFeatures = false;
   bool sleepDisplay = false;
   bool lowContrast = false;

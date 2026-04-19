@@ -10,25 +10,19 @@
 #include <ESP32Encoder.h> // https://github.com/madhephaestus/ESP32Encoder/tree/master
 
 // for example:
-// QuadratureEsp32 encoder1(AXIS1_ENCODER_A_PIN, AXIS1_ENCODER_B_PIN, 1);
-
-// Phase 1: LLHH LLHH
-// Phase 2: LHHL LHHL
-// ...00 01 11 10 00 01 11 10 00 01 11 10...
+// QuadratureEsp32 encoder1(1, AXIS1_ENCODER_A_PIN, AXIS1_ENCODER_B_PIN);
 
 class QuadratureEsp32 : public Encoder {
   public:
-    QuadratureEsp32(int16_t APin, int16_t BPin, int16_t axis);
-    void init();
+    QuadratureEsp32(int16_t axis, int16_t APin, int16_t BPin);
+    bool init();
 
     int32_t read();
-    void write(int32_t count);
+    void write(int32_t position);
 
-    ESP32Encoder *ab;
+    ESP32Encoder *ab = nullptr;
 
   private:
-    int16_t axis;
-
     int16_t APin = OFF;
     int16_t BPin = OFF;
 };

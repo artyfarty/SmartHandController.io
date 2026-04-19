@@ -69,7 +69,7 @@ bool UI::menuSetBacklash(uint8_t &axis)
   float backlash;
   if (!message.show(onStepLx200.readBacklash(axis, backlash))) return false;
   char text[20];
-  sprintf(text, L_MOUNT_BL " Axis%u", axis);
+  snprintf(text, sizeof(text), L_MOUNT_BL " Axis%u", axis);
   if (display->UserInterfaceInputValueFloat(&keyPad, text, "", &backlash, 0, 3600, 4, 0, " " L_ARCSEC)) {
     return message.show(onStepLx200.writeBacklash(axis, backlash), false);
   }
@@ -109,8 +109,8 @@ void UI::menuHorizon() {
   char out[20];
   if (message.show(onStepLx200.Get(":Gh#", out))) {
     float angle = (float)strtol(&out[0], NULL, 10);
-    if (display->UserInterfaceInputValueFloat(&keyPad, L_MOUNT_LIMIT_HORIZON, "", &angle, -10, 20, 2, 0, " degree")) {
-      sprintf(out, ":Sh%+03d#", (int)angle);
+    if (display->UserInterfaceInputValueFloat(&keyPad, L_MOUNT_LIMIT_HORIZON, "", &angle, -90, 30, 2, 0, " " L_DEGREE)) {
+      snprintf(out, sizeof(out), ":Sh%+03d#", (int)angle);
       message.show(onStepLx200.Set(out), false);
     }
   }
@@ -120,8 +120,8 @@ void UI::menuOverhead() {
   char out[20];
   if (message.show(onStepLx200.Get(":Go#", out))) {
     float angle = (float)strtol(&out[0], NULL, 10);
-    if (display->UserInterfaceInputValueFloat(&keyPad, L_MOUNT_LIMIT_OVERHEAD, "", &angle, 60, 91, 2, 0, " " L_DEGREE)) {
-      sprintf(out, ":So%02d#", (int)angle);
+    if (display->UserInterfaceInputValueFloat(&keyPad, L_MOUNT_LIMIT_OVERHEAD, "", &angle, 60, 90, 2, 0, " " L_DEGREE)) {
+      snprintf(out, sizeof(out), ":So%02d#", (int)angle);
       message.show(onStepLx200.Set(out), false);
     }
   }
@@ -134,7 +134,7 @@ void UI::menuMeridianE() {
     angle = round((angle * 15.0) / 60.0);
     if (display->UserInterfaceInputValueFloat(&keyPad, L_MOUNT_LIMIT_MERIDIAN_EAST, "", &angle, -180, 180, 3, 0, " " L_DEGREE)) {
       angle = round((angle * 60.0) / 15.0);
-      sprintf(out, ":SXE9,%+02d#", (int)angle);
+      snprintf(out, sizeof(out), ":SXE9,%+02d#", (int)angle);
       message.show(onStepLx200.Set(out), false);
     }
   }
@@ -147,7 +147,7 @@ void UI::menuMeridianW() {
     angle = round((angle * 15.0) / 60.0);
     if (display->UserInterfaceInputValueFloat(&keyPad, L_MOUNT_LIMIT_MERIDIAN_WEST, "", &angle, -180, 180, 3, 0, " " L_DEGREE)) {
       angle = round((angle * 60.0) / 15.0);
-      sprintf(out, ":SXEA,%+02d#", (int)angle);
+      snprintf(out, sizeof(out), ":SXEA,%+02d#", (int)angle);
       message.show(onStepLx200.Set(out), false);
     }
   }
@@ -159,15 +159,17 @@ void UI::menuPier() {
   char ppsState[20]=""; ok = onStepLx200.Get(":GX96#",ppsState) == CR_VALUE_GET;
   if (ok) {
     uint8_t choice = 1;
-    if (ppsState[0] == 'B') choice = 1; else
-    if (ppsState[0] == 'E') choice = 2; else
-    if (ppsState[0] == 'W') choice = 3;
+    if (ppsState[0] == 'E') choice = 1; else
+    if (ppsState[0] == 'W') choice = 2; else
+    if (ppsState[0] == 'B') choice = 3; else
+    if (ppsState[0] == 'A') choice = 4;
     
-    choice = display->UserInterfaceSelectionList(&keyPad, L_MOUNT_PPS, choice, L_PPS_BEST "\n" L_PPS_EAST "\n" L_PPS_WEST);
+    choice = display->UserInterfaceSelectionList(&keyPad, L_MOUNT_PPS, choice, L_PPS_EAST "\n" L_PPS_WEST "\n" L_PPS_BEST "\n" L_PPS_AUTO);
     if (choice) {
-      if (choice == 1) ok = message.show(onStepLx200.Set(":SX96,B#"), false); else
-      if (choice == 2) ok = message.show(onStepLx200.Set(":SX96,E#"), false); else
-      if (choice == 3) ok = message.show(onStepLx200.Set(":SX96,W#"), false);
+      if (choice == 1) ok = message.show(onStepLx200.Set(":SX96,E#"), false); else
+      if (choice == 2) ok = message.show(onStepLx200.Set(":SX96,W#"), false); else
+      if (choice == 3) ok = message.show(onStepLx200.Set(":SX96,B#"), false); else
+      if (choice == 4) ok = message.show(onStepLx200.Set(":SX96,A#"), false);
     }
   }
 }

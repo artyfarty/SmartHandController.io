@@ -165,8 +165,13 @@ bool Status::isGuiding() {
 }
 
 bool Status::isMountGEM() {
-  if (strlen(TelStatus)<4) return false;
+  if (strlen(TelStatus) < 4) return false;
   return (TelStatus[3] & 0b00000001);
+}
+
+bool Status::isMountFork() {
+  if (strlen(TelStatus) < 4) return false;
+  return (TelStatus[3] & 0b00000010);
 }
 
 bool Status::isMountAltAz() {
@@ -311,12 +316,9 @@ bool Status::hasReticle() {
 }
 
 bool Status::hasDateTime() {
-  static bool dateTimeKnownValid = false;
-  if (dateTimeKnownValid) return true; // once OnStep says the date/time has been set no need to keep asking
-  bool dateTime = false; // default is to assume the date/time has been set unless OnStep tells us otherwise
+  bool dateTime = false;
   char out[20];
   if ((onStepLx200.Get(":GX89#", out) == CR_VALUE_GET)) dateTime = (out[0] == '0');
-  if (dateTime == true) dateTimeKnownValid = true;
   return dateTime;
 }
 

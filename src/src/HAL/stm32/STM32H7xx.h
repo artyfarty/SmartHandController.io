@@ -20,6 +20,19 @@
   #define ANALOG_WRITE_RANGE 255
 #endif
 
+// STM32 Arduino cores (F4 + H7):
+// assume global resolution functions exist; per-pin freq/res is not generic.
+#define HAL_HAS_GLOBAL_PWM_RESOLUTION 1
+#define HAL_HAS_GLOBAL_ADC_RESOLUTION 1
+
+#define HAL_PWM_BITS_MAX 16
+
+// F4 ADC is 12-bit; H7 can be higher, but core support varies.
+// Default to 12 and let advanced HAL override to 16 for known-good H7 setup.
+#ifndef HAL_ADC_BITS_MAX
+  #define HAL_ADC_BITS_MAX 12
+#endif
+
 // Lower limit (fastest) step rate in uS for this platform (in SQW mode) and width of step pulse
 #define HAL_MAXRATE_LOWER_LIMIT 1.5
 #define HAL_PULSE_WIDTH 0  // effectively disable pulse mode
@@ -34,7 +47,9 @@
 
 // New symbol for the default I2C port ---------------------------------------------------------------
 #include <Wire.h>
-#define HAL_WIRE Wire
+#ifndef HAL_WIRE
+  #define HAL_WIRE Wire
+#endif
 #ifndef HAL_WIRE_CLOCK
   #define HAL_WIRE_CLOCK 100000
 #endif
@@ -43,7 +58,7 @@
 #undef E2END
 #if NV_DRIVER == NV_DEFAULT
   #undef NV_DRIVER
-  #define NV_DRIVER NV_AT24C32
+  #define NV_DRIVER NV_24256
 #endif
 
 //--------------------------------------------------------------------------------------------------
@@ -52,23 +67,14 @@
 
 //--------------------------------------------------------------------------------------------------
 // General purpose initialize for HAL
-
 #define HAL_INIT() { \
-  analogWriteResolution((int)log2(ANALOG_WRITE_RANGE + 1)); \
-  HAL_WIRE.setSDA(PB9); \
-  HAL_WIRE.setSCL(PB8); \
-  HAL_WIRE.setClock(HAL_WIRE_CLOCK); \
-  HAL_WIRE.begin(); \
 }
 
 //---------------------------------------------------------------------------------------------------
 // Misc. includes to support this processor's operation
 
+// always bring in the software serial library early as strange things happen otherwise
+#include <SoftwareSerial.h>
+
 // MCU reset
 #define HAL_RESET() NVIC_SystemReset()
-
-// a really short fixed delay (none needed)
-#define HAL_DELAY_25NS()
-
-// stand-in for delayNanoseconds()
-#define delayNanoseconds(ns) delayMicroseconds(ceilf(ns/1000.0F))

@@ -13,9 +13,6 @@ class GpioDs2413 : public Gpio {
     // scan for DS2413 devices on the 1-wire bus
     bool init();
 
-    // process any gpio commands
-    bool command(char *reply, char *command, char *parameter, bool *supressFrame, bool *numericReply, CommandError *commandError);
-
     // set GPIO pin mode for INPUT or OUTPUT (both pins of any device must be in the same mode)
     void pinMode(int pin, int mode);
 
@@ -35,7 +32,7 @@ class GpioDs2413 : public Gpio {
 
     uint8_t address[DS2413_MAX_DEVICES][8];
 
-    int mode[DS2413_MAX_DEVICES] = {INPUT, INPUT};
+    int8_t mode[DS2413_MAX_DEVICES] = {INPUT, INPUT};
     uint8_t state[DS2413_MAX_DEVICES*2] = {false, false, false, false};
     int16_t lastState[DS2413_MAX_DEVICES*2] = {INVALID, INVALID, INVALID, INVALID};
 

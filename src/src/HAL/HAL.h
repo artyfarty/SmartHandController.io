@@ -16,6 +16,21 @@
  */
 #pragma once
 
+// null decoration for non-ESP processors
+#ifndef IRAM_ATTR
+  #define IRAM_ATTR
+#endif
+
+#ifndef ICACHE_RAM_ATTR
+  #define ICACHE_RAM_ATTR
+#endif
+
+#ifndef FPSTR
+  #define FPSTR
+#endif
+
+#include "HAL_FAST_TICKS.h"
+
 #if defined(__AVR_ATmega328P__)
   #define MCU_STR "AtMega328"
   #include "atmel/Mega328.h"
@@ -36,18 +51,17 @@
 #elif defined(ARDUINO_ARCH_SAMD)
   // ARDUINO M0
   #define MCU_STR "ARDUINO M0"
-  #include "HAL_ZERO.h"
+  #include "arduinoM0/ArduinoM0.h"
 
-#elif defined(ESP32)
-  // ESP32
+#elif defined(ESP32) && ESP_ARDUINO_VERSION >= 0x30000
+  // ESP32 w/libraries 3.x
   #define MCU_STR "ESP32"
-  #if ESP_ARDUINO_VERSION >= 0x30000
-    #include "esp/ESP32Libraries3.h"
-  #elif ESP_ARDUINO_VERSION >= 0x20000 + 3
-    #include "esp/ESP32Libraries2.h"
-  #else
-    #include "esp/ESP32Libraries1.h"
-  #endif
+  #include "esp/ESP32Libraries3.h"
+
+#elif defined(ESP32) && ESP_ARDUINO_VERSION >= 0x20000
+  // ESP32 w/libraries 2.x
+  #define MCU_STR "ESP32"
+  #include "esp/ESP32Libraries2.h"
 
 #elif defined(ESP8266)
   // ESP8266
@@ -83,6 +97,10 @@
   // FYSETC S6 board with STM32F446
   #define MCU_STR "STM32F446"
   #include "stm32/STM32F446.h"
+
+#elif defined(STM32H723xx)
+  #define MCU_STR "STM32H723"
+  #include "stm32/STM32H7xx.h"
 
 #elif defined(STM32H743xx)
   // WeAct Studio board with STM32H743
@@ -129,6 +147,16 @@
   #define MCU_STR "TeensyMicroMod"
   #include "teensy/Teensy4.1.h"
 
+#elif defined(ARDUINO_ARCH_RP2040)
+  // Raspberry pi pico
+  #define MCU_STR "Raspberry Pi Pico"
+  #include "mbed/Rpi2040.h"
+
+#elif defined(ARDUINO_ARCH_RP2350)
+  // Raspberry pi pico2
+  #define MCU_STR "Raspberry Pi Pico2"
+  #include "mbed/Rpi2350.h"
+
 #else
   // Generic
   #warning "Unknown Platform! If this is a new platform, it would probably do best with a new HAL designed for it."
@@ -136,29 +164,27 @@
   #include "default/Default.h"
 #endif
 
-// create null decoration for non-ESP processors
-#ifndef IRAM_ATTR
-  #define IRAM_ATTR
+#include "HAL_ANALOG.h"
+
+#ifndef HAL_INIT
+  #define HAL_INIT() do { HAL_FAST_TICKS_INIT(); } while (0)
 #endif
 
-#ifndef ICACHE_RAM_ATTR
-  #define ICACHE_RAM_ATTR
-#endif
-
-#ifndef FPSTR
-  #define FPSTR
-#endif
-
+// baseline critical task timing
 #ifdef HAL_FRACTIONAL_SEC
   #define FRACTIONAL_SEC  HAL_FRACTIONAL_SEC
 #else
   #define FRACTIONAL_SEC  100.0F
 #endif
 
-#ifndef HAL_MIN_PPS_SUB_MICRO
-  #define HAL_MIN_PPS_SUB_MICRO 4
-#endif
-
+// progmem standin for platforms that don't have it
 #ifndef CAT_ATTR
   #define CAT_ATTR
+#endif
+
+// default I2C interface
+#if defined(HAL_WIRE_CLOCK)
+  #define HAL_WIRE_SET_CLOCK() HAL_WIRE.setClock(HAL_WIRE_CLOCK)
+#else
+  #define HAL_WIRE_SET_CLOCK()
 #endif

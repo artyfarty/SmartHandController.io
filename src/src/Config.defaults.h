@@ -10,6 +10,7 @@
 // use the HAL specified default NV driver
 #ifndef NV_DRIVER
 #define NV_DRIVER                NV_DEFAULT
+#define NV_WAIT                  1500
 #endif
 
 // activate ST4 port serial interface
@@ -29,11 +30,33 @@
 // src/lib/wifi/WifiManager.defaults.h
 #if SERIAL_RADIO == WIFI_STATION || SERIAL_RADIO == BOTH
 #define SERIAL_IP_MODE           STATION
-// Use all six stations
-#define WifiStationCount         6
+
+#ifndef NV_WIFI_SETTINGS
+#define NV_WIFI_SETTINGS                         // allow NV storage of WiFi settings
 #endif
 
-// set defaults just incase
+#ifndef WifiStationCount
+#define WifiStationCount         6               // use all six stations
+#endif
+#endif
+
+// some additional flexibility, just incase
+
+// note BT reboots to the connect menu regardless of the setting below
+// which reboots serial and wifi also
+#ifndef REBOOT_TO_CONNECT_MENU
+#define REBOOT_TO_CONNECT_MENU   OFF
+#endif
+#ifndef REBOOT_TO_SERIAL
+#define REBOOT_TO_SERIAL         OFF
+#endif
+#ifndef REBOOT_TO_WIFI
+#define REBOOT_TO_WIFI           OFF
+#endif
+#ifndef REBOOT_TO_BLUETOOTH
+#define REBOOT_TO_BLUETOOTH      OFF
+#endif
+
 #ifndef SERIAL_IP_MODE
 #define SERIAL_IP_MODE           OFF
 #endif
@@ -49,7 +72,32 @@
 #define STA_ENABLED              true
 #define STA_HOST_NAME            "OnStep"
 #define STA_SSID                 "OnStep"
+
+#ifndef MDNS_SERVER
 #define MDNS_SERVER              ON
+#endif
+#ifndef MDNS_CLIENT
+#define MDNS_CLIENT              ON
+#endif
+
+#ifndef STA1_DHCP_ENABLED
+#define STA1_DHCP_ENABLED        true
+#endif
+#ifndef STA2_DHCP_ENABLED
+#define STA2_DHCP_ENABLED        true
+#endif
+#ifndef STA3_DHCP_ENABLED
+#define STA3_DHCP_ENABLED        true
+#endif
+#ifndef STA4_DHCP_ENABLED
+#define STA4_DHCP_ENABLED        true
+#endif
+#ifndef STA5_DHCP_ENABLED
+#define STA5_DHCP_ENABLED        true
+#endif
+#ifndef STA6_DHCP_ENABLED
+#define STA6_DHCP_ENABLED        true
+#endif
 #endif
 
 // enable and customize Bluetooth functionality
@@ -62,7 +110,25 @@
 
 #ifndef SERIAL_BT_MODE
 #define SERIAL_BT_MODE           OFF
+#endif
 
+// for battery charge level indication
+#ifndef BATTERY_VOLTAGE_0
+#define BATTERY_VOLTAGE_0        2.8F
+#endif
+#ifndef BATTERY_VOLTAGE_25
+#define BATTERY_VOLTAGE_25       3.6F
+#endif
+#ifndef BATTERY_VOLTAGE_50
+#define BATTERY_VOLTAGE_50       3.7F
+#endif
+#ifndef BATTERY_VOLTAGE_75
+#define BATTERY_VOLTAGE_75       3.9F
+#endif
+
+// by default uses a 2:1 voltage divider so multiply by 2
+#ifndef BATTERY_VOLTAGE_FORMULA
+#define BATTERY_VOLTAGE_FORMULA(v) (v*2.0F)
 #endif
 
 #ifndef ENCODER_SLEW_CONTROL

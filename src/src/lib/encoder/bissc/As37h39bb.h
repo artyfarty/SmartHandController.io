@@ -7,13 +7,10 @@
 
   class As37h39bb : public Bissc {
     public:
-      // initialize Bissc encoder
-      // nvAddress holds settings for the 9 supported axes, 9*4 = 72 bytes; set nvAddress 0 to disable
-      As37h39bb(int16_t maPin, int16_t sloPin, int16_t axis);
+      // initialize BiSS-C encoder
+      As37h39bb(int16_t axis, int16_t maPin, int16_t sloPin);
 
     private:
-      // read encoder position
-      bool readEnc(uint32_t &position);
 
       // BiSS-C 6-bit CRC of 41 bit data (16 multi-turn + 23 position + 2 err/wrn)
       uint8_t crc6(uint64_t data);

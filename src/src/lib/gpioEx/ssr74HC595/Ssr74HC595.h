@@ -11,9 +11,6 @@ class GpioSsr74HC595 : public Gpio {
     // init for SSR74HC595 device
     bool init();
 
-    // process any gpio commands
-    bool command(char *reply, char *command, char *parameter, bool *supressFrame, bool *numericReply, CommandError *commandError);
-
     // set GPIO pin mode for INPUT, INPUT_PULLUP, or OUTPUT (input does nothing always, false)
     void pinMode(int pin, int mode);
 
@@ -27,7 +24,7 @@ class GpioSsr74HC595 : public Gpio {
     uint32_t register_value = 0;
     bool found = false;
 
-    int mode[32];
+    int8_t mode[32];
     bool state[32];
 };
 

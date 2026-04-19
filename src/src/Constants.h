@@ -13,7 +13,7 @@
 #define FWU                         -205
 #define JS1                         -206
 
-#define TIMEOUT_CMD                 2000  // Default 2000 ms, 2 seconds
+#define TIMEOUT_CMD                 3000  // Default 3000 ms, 3 seconds
 #define FOREGROUND_CMD_RATE         300   // Default 300 ms, regulates the forground command rate
 #define BACKGROUND_CMD_RATE         1500  // Default 1500 ms, regulates the background (dimmed display) command rate
 
@@ -39,11 +39,6 @@
 #define WEATHER_LAST                6
 
 // NV -------------------------------------------------------------------------------------------------------------------
-#define INIT_NV_KEY                 159301357UL
 
-#define NV_KEY                      0      // bytes: 4   , addr:   0..  3
-#define NV_DISPLAY_SETTINGS_BASE    4      // bytes: 24  , addr:   4.. 27
-
-#define NV_BT_SETTINGS_BASE        28      // bytes: 149 , addr:  28..176 (BluetoothSettingsSize)
-
-#define NV_WIFI_SETTINGS_BASE     177      // bytes: 451 , addr:  28..627 (WifiSettingsSize)
+// unique volume signature for this volume/partition layout
+#define NV_VOLUME_SIGNATURE         0x0001u

@@ -29,8 +29,8 @@
 
 #define Product               "SHC"
 #define FirmwareVersionMajor  "4"
-#define FirmwareVersionMinor  "02"
-#define FirmwareVersionPatch  "n"
+#define FirmwareVersionMinor  "03"
+#define FirmwareVersionPatch  "b"
 
 #include "src/Common.h"
 #include "src/Validate.h"
@@ -43,17 +43,22 @@
 
 #include "src/userInterface/UserInterface.h"
 
+#include "src/plugins/Plugins.config.h"
+
 #if DEBUG == PROFILER
   extern void profiler();
 #endif
 
 const char Version[] = "Version " FirmwareVersionMajor "." FirmwareVersionMinor FirmwareVersionPatch;
-const int pin[7] = {B_PIN0, B_PIN1, B_PIN2, B_PIN3, B_PIN4, B_PIN5, B_PIN6};
-const int active[7] = {B_PIN0_ACTIVE_STATE, B_PIN1_ACTIVE_STATE, B_PIN2_ACTIVE_STATE, B_PIN3_ACTIVE_STATE, B_PIN4_ACTIVE_STATE, B_PIN5_ACTIVE_STATE, B_PIN6_ACTIVE_STATE};
-
-void systemServices() {
-  nv.poll(false);
-}
+const KeyPad::Pin pins[7]= {
+  {B_PIN0, B_PIN0_ACTIVE_STATE, B_PIN0_INPUT_MODE},
+  {B_PIN1, B_PIN1_ACTIVE_STATE, B_PIN1_INPUT_MODE},
+  {B_PIN2, B_PIN2_ACTIVE_STATE, B_PIN2_INPUT_MODE},
+  {B_PIN3, B_PIN3_ACTIVE_STATE, B_PIN3_INPUT_MODE},
+  {B_PIN4, B_PIN4_ACTIVE_STATE, B_PIN4_INPUT_MODE},
+  {B_PIN5, B_PIN5_ACTIVE_STATE, B_PIN5_INPUT_MODE},
+  {B_PIN6, B_PIN6_ACTIVE_STATE, B_PIN6_INPUT_MODE},
+};
 
 #if WEATHER != OFF
   void weatherServices() {
@@ -69,26 +74,33 @@ void systemServices() {
 #endif
 
 void setup(void) {
-  
+
   // start debug serial port
   if (DEBUG == ON || DEBUG == VERBOSE) SERIAL_DEBUG.begin(SERIAL_DEBUG_BAUD);
   delay(2000);
 
   VF("MSG: Smart Hand Controller "); V(FirmwareVersionMajor); V("."); V(FirmwareVersionMinor); VL(FirmwareVersionPatch);
   VF("MSG: MCU = "); VLF(MCU_STR);
-  
-  HAL_INIT();
-  if (!nv.init()) {
-    DLF("WRN: Setup, NV (EEPROM/FRAM/Flash/etc.) device not found!");
-    nv.initError = true;
-  }
- 
-  // System services
-  // add task for system services, runs at 10ms intervals so commiting 1KB of NV takes about 10 seconds
-  VF("MSG: Setup, starting system services task (rate 10ms priority 7)... ");
-  if (tasks.add(10, 0, true, 5, systemServices, "SysSvcs")) { VL("success"); } else { VL("FAILED!"); }
 
-  userInterface.init(Version, pin, active, SERIAL_ONSTEP_BAUD_DEFAULT, static_cast<OLED>(DISPLAY_OLED));
+  HAL_INIT();
+  WIRE_INIT();
+
+  // start the NV service task at priority level 5
+  if (!nv().init(5)) {
+    DLF("WRN: Setup, NV (EEPROM/FRAM/Flash/etc.) device not found!");
+  }
+
+  #if defined(NV_WIPE) && NV_WIPE == ON
+    nv().wipe();
+  #endif
+
+  // If necessary, power up the display
+  #ifdef DISPLAY_POWER_PIN
+    pinMode(DISPLAY_POWER_PIN, OUTPUT);
+    digitalWrite(DISPLAY_POWER_PIN, HIGH);
+  #endif
+
+  userInterface.init(Version, pins, SERIAL_ONSTEP_BAUD_DEFAULT, static_cast<OLED>(DISPLAY_OLED));
 
   #if WEATHER != OFF
     // get any BME280 or BMP280 ready
@@ -102,6 +114,32 @@ void setup(void) {
   // start task manager debug events
   #if DEBUG == PROFILER
     tasks.add(142, 0, true, 7, profiler, "Profilr");
+  #endif
+
+  // start any plugins
+  #if PLUGIN1 != OFF
+    PLUGIN1.init();
+  #endif
+  #if PLUGIN2 != OFF
+    PLUGIN2.init();
+  #endif
+  #if PLUGIN3 != OFF
+    PLUGIN3.init();
+  #endif
+  #if PLUGIN4 != OFF
+    PLUGIN4.init();
+  #endif
+  #if PLUGIN5 != OFF
+    PLUGIN5.init();
+  #endif
+  #if PLUGIN6 != OFF
+    PLUGIN6.init();
+  #endif
+  #if PLUGIN7 != OFF
+    PLUGIN7.init();
+  #endif
+  #if PLUGIN8 != OFF
+    PLUGIN8.init();
   #endif
 
   VLF("MSG: Starting UI loop");

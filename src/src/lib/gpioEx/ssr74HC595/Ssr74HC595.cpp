@@ -5,8 +5,6 @@
 
 #if defined(GPIO_DEVICE) && GPIO_DEVICE == SSR74HC595
 
-#include "../tasks/OnTask.h"
-
 #if !defined(GPIO_SSR74HC595_LATCH_PIN) || GPIO_SSR74HC595_LATCH_PIN == OFF
   #error "GPIO device SSR74HC595 GPIO_SSR74HC595_LATCH_PIN must be present and not OFF."
 #endif
@@ -42,7 +40,7 @@
 #endif
 
 // designed for a 20MHz max bit rate
-IRAM_ATTR void shiftOut20MHz(uint32_t val) {
+IRAM_ATTR void shiftOut20MHz(uint8_t val) {
   if ((val & 0b10000000) == 0) { GPIO_SSR74HC595_DATA_LOW(); } else { GPIO_SSR74HC595_DATA_HIGH(); }
   GPIO_SSR74HC595_CLOCK_HIGH();
   GPIO_SSR74HC595_CLOCK_LOW();

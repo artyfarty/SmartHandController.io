@@ -24,8 +24,12 @@
 
 // New symbol for the default I2C port -------------------------------------------------------------
 #include <Wire.h>
-#define HAL_WIRE Wire
-#define HAL_WIRE_CLOCK 100000
+#ifndef HAL_WIRE
+  #define HAL_WIRE Wire
+#endif
+#ifndef HAL_WIRE_CLOCK
+  #define HAL_WIRE_CLOCK 100000
+#endif
 
 // Non-volatile storage ----------------------------------------------------------------------------
 #if NV_DRIVER == NV_DEFAULT
@@ -40,7 +44,13 @@
 
 //--------------------------------------------------------------------------------------------------
 // General purpose initialize for HAL
-#define HAL_INIT() { ; }
 
-// stand-in for delayNanoseconds()
-#define delayNanoseconds(ns) delayMicroseconds(ceilf(ns/1000.0F))
+#define HAL_INIT() { \
+  HAL_FAST_TICKS_INIT(); \
+}
+
+// MCU reset
+#define HAL_RESET() ESP.restart()
+
+//---------------------------------------------------------------------------------------------------
+// Misc. includes to support this processor's operation

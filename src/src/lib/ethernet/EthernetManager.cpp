@@ -1,7 +1,7 @@
 // ethernet manager, used by the webserver and ethernet serial IP
 #include "EthernetManager.h"
 
-#if defined(OPERATIONAL_MODE) && (OPERATIONAL_MODE == ETHERNET_W5100 || OPERATIONAL_MODE == ETHERNET_W5500)
+#if OPERATIONAL_MODE >= ETHERNET_FIRST && OPERATIONAL_MODE <= ETHERNET_LAST
 
 #include "../tasks/OnTask.h"
 #include "../nv/Nv.h"
@@ -9,23 +9,37 @@
 #if MDNS_SERVER == ON
   enum MdnsReady {MD_WAIT, MD_READY, MD_FAIL};
 
-  EthernetUDP udp;
-  MDNS mdns(udp);
+  #if OPERATIONAL_MODE != ETHERNET_TEENSY41
+    EthernetUDP udp;
+    MDNS mdns(udp);
+  #endif
 
   void mdnsPoll() {
     static MdnsReady mdnsReady = MD_WAIT;
     if (mdnsReady == MD_WAIT && millis() > 5000) {
       char name[] = MDNS_NAME;
       strtohostname2(name);
-      if (mdns.begin(Ethernet.localIP(), name)) {
+      #if OPERATIONAL_MODE == ETHERNET_TEENSY41
+        MDNS.begin(name, 1);
         VF("MSG: Ethernet, mDNS started for "); VL(name);
+        // MDNS.addService("_http._tcp", 80); // adding a webserver service would look like this
         mdnsReady = MD_READY;
-      } else {
-        VF("WRN: Ethernet, mDNS start FAILED for "); VL(name);
-        mdnsReady = MD_FAIL;
-      }
+      #else
+        if (mdns.begin(Ethernet.localIP(), name)) {
+          VF("MSG: Ethernet, mDNS started for "); VL(name);
+          mdnsReady = MD_READY;
+        } else {
+          DF("WRN: Ethernet, mDNS start FAILED for "); DL(name);
+          mdnsReady = MD_FAIL;
+        }
+      #endif
     }
-    if (mdnsReady == MD_READY) mdns.run();
+
+    if (mdnsReady == MD_READY) {
+      #if OPERATIONAL_MODE != ETHERNET_TEENSY41
+        mdns.run();
+      #endif
+    }
   }
 #endif
 
@@ -52,6 +66,17 @@ bool EthernetManager::init() {
     } else {
       Ethernet.begin(settings.mac, settings.ip, settings.dns, settings.gw, settings.sn);
     }
+
+    if (Ethernet.hardwareStatus() == EthernetNoHardware) {
+      DLF("WRN: Ethernet, no hardware");
+      return false;
+    }
+
+    if (Ethernet.linkStatus() == LinkOFF) {
+      DLF("WRN: Ethernet, no cable");
+      return false;
+    }
+
     active = true;
 
     VLF("MSG: Ethernet, initialized");
@@ -62,6 +87,7 @@ bool EthernetManager::init() {
       if (tasks.add(5, 0, true, 7, mdnsPoll, "mdPoll")) { VL("success"); } else { VL("FAILED!"); }
     #endif
   }
+
   return active;
 }
 
@@ -90,21 +116,22 @@ void EthernetManager::disconnect() {
 
 void EthernetManager::setStation(int number) {
   if (number >= 1 && number <= EthernetStationCount) stationNumber = number;
-  sta = &settings.station[stationNumber - 1];
+  sta = &station[stationNumber - 1];
 }
 
 void EthernetManager::readSettings() {
   if (settingsReady) return;
 
-  #ifdef NV_ETHERNET_SETTINGS_BASE
-    if (EthernetSettingsSize < sizeof(EthernetSettings)) { nv.initError = true; DL("ERR: EthernetManager::init(); EthernetSettingsSize error"); }
+  #ifdef NV_ETHERNET_SETTINGS
+    VLF("MSG: Ethernet, reading settings from NV");
+    if (!nv().kv().getOrInit("ETHERNET_SETTINGS", settings)) { DLF("WRN: Nv, init failed for ETHERNET_SETTINGS"); }
 
-    if (!nv.hasValidKey() || nv.isNull(NV_ETHERNET_SETTINGS_BASE, sizeof(EthernetSettings))) {
-      VLF("MSG: Ethernet, writing defaults to NV");
-      nv.writeBytes(NV_ETHERNET_SETTINGS_BASE, &settings, sizeof(EthernetSettings));
+    for (int i = 1; i <= EthernetStationCount; i++) {
+      char keyStr[24];
+      snprintf(keyStr, sizeof(keyStr), "ETHERNET_STATION%u", i);
+      if (!nv().kv().getOrInit(keyStr, station[i - 1])) { DF("WRN: Nv, init failed for "); DL(keyStr); }
+      nv().kv().put(keyStr, station[i - 1]);
     }
-
-    nv.readBytes(NV_ETHERNET_SETTINGS_BASE, &settings, sizeof(EthernetSettings));
   #endif
 
   #if DEBUG != OFF
@@ -115,8 +142,8 @@ void EthernetManager::readSettings() {
     VF("MSG: Ethernet, GW          = "); V(settings.gw[0]); V("."); V(settings.gw[1]); V("."); V(settings.gw[2]); V("."); VL(settings.gw[3]);
     VF("MSG: Ethernet, SN          = "); V(settings.sn[0]); V("."); V(settings.sn[1]); V("."); V(settings.sn[2]); V("."); VL(settings.sn[3]);
 
-    for (int station = 1; station <= EthernetStationCount; station++) {
-      setStation(station);
+    for (int i = 1; i <= EthernetStationCount; i++) {
+      setStation(i);
 
       VF("MSG: Ethernet, Sta"); V(stationNumber); VF(" NAME   = "); VL(sta->host);
       VF("MSG: Ethernet, Sta"); V(stationNumber); VF(" TARGET = "); V(sta->target[0]); V("."); V(sta->target[1]); V("."); V(sta->target[2]); V("."); VL(sta->target[3]);
@@ -130,9 +157,15 @@ void EthernetManager::readSettings() {
 void EthernetManager::writeSettings() {
   if (!settingsReady) return;
 
-  #ifdef NV_ETHERNET_SETTINGS_BASE
+  #ifdef NV_ETHERNET_SETTINGS
     VLF("MSG: Ethernet, writing settings to NV");
-    nv.writeBytes(NV_ETHERNET_SETTINGS_BASE, &settings, sizeof(EthernetSettings));
+    nv().kv().set("ETHERNET_SETTINGS", settings);
+
+    for (int i = 1; i <= EthernetStationCount; i++) {
+      char keyStr[24];
+      snprintf(keyStr, sizeof(keyStr), "ETHERNET_STATION%u", i);
+      nv().kv().put(keyStr, station[i - 1]);
+    }
   #endif
 }
 

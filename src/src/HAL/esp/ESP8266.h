@@ -23,7 +23,9 @@
 
 // New symbol for the default I2C port ---------------------------------------------------------------
 #include <Wire.h>
-#define HAL_WIRE Wire
+#ifndef HAL_WIRE
+  #define HAL_WIRE Wire
+#endif
 #ifndef HAL_WIRE_CLOCK
   #define HAL_WIRE_CLOCK 100000
 #endif
@@ -41,13 +43,9 @@
 
 //--------------------------------------------------------------------------------------------------
 // General purpose initialize for HAL
-#define HAL_INIT() { analogWriteRange((int)log2(ANALOG_WRITE_RANGE + 1)); }
 
 //-----------------------------------------------------------------------------------------------------
 // Misc. includes and defines to support this processor's operation
 
 // MCU reset
 #define HAL_RESET() ESP.restart()
-
-// stand-in for delayNanoseconds(), assumes 80MHz clock
-#define delayNanoseconds(ns) { unsigned int c = ESP.getCycleCount() + ns/12.5F; do {} while ((int)(ESP.getCycleCount() - c) < 0); }

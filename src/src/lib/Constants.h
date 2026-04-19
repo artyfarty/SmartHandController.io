@@ -15,19 +15,16 @@
 #define PROFILER                    -11
 #define VERBOSE                     -12
 #define REMOTE                      -13
-#define ETHERNET_W5100              -14
-#define ETHERNET_W5500              -15
-#define WIFI                        -16
-#define WIFI_ACCESS_POINT           -17    // shorthand for easy WIFI mode settings
-#define WIFI_STATION                -18    // shorthand for easy WIFI mode settings
-#define BLUETOOTH                   -19    // shorthand for easy bluetooth mode settings
-#define SHARED                      -20
-#define STANDARD                    -21
-#define PERSISTENT                  -22
-#define ERRORS_ONLY                 -23
-#define MINIMUM                     -24
-#define MIDDLE                      -25
-#define MAXIMUM                     -26
+#define WIFI_ACCESS_POINT           -14    // shorthand for easy WIFI mode settings
+#define WIFI_STATION                -15    // shorthand for easy WIFI mode settings
+#define BLUETOOTH                   -16    // shorthand for easy bluetooth mode settings
+#define SHARED                      -17
+#define STANDARD                    -18
+#define PERSISTENT                  -19
+#define ERRORS_ONLY                 -20
+#define MINIMUM                     -21
+#define MIDDLE                      -22
+#define MAXIMUM                     -23
 #define INVALID                     -127
 
 // CAN interface options
@@ -38,6 +35,16 @@
 #define CAN1_TEENSY4                4
 #define CAN2_TEENSY4                5
 #define CAN3_TEENSY4                6
+
+// network interface options
+#define ETHERNET_FIRST              1
+#define ETHERNET_W5100              1
+#define ETHERNET_W5500              2
+#define ETHERNET_TEENSY41           3
+#define ETHERNET_LAST               3
+#define WIFI_FIRST                  4
+#define WIFI                        4
+#define WIFI_LAST                   4
 
 // driver (step/dir interface, usually for stepper motors)
 // changes here must be reflected in the StepDirDriver.cpp file, etc.
@@ -54,27 +61,19 @@
 #define TMC2208S                    9      // allows M0,M1    bit patterens for 2x,4x,8x,16x   (stealthChop default, uses 256x intpol)
 #define TMC2225S                    10     // allows M0,M1    bit patterens for 4x,8x,16x,32x  (M2 sets spreadCycle/stealthChop, uses 256x intpol)
 #define TMC2209S                    11     // allows M0,M1    bit patterens for 8x,16x,32x,64x (M2 sets spreadCycle/stealthChop, uses 256x intpol)
-#define TMC2226S                    11     // allows M0,M1    bit patterens for 8x,16x,32x,64x (M2 sets spreadCycle/stealthChop, uses 256x intpol)
-#define TMC_DRIVER_FIRST            12
-#define TMC2130                     12     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
-#define TMC2660                     13     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
-#define TMC5160                     14     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
-#define TMC5161                     15     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
-#define TMC_UART_DRIVER_FIRST       16
-#define TMC2208                     16     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
-#define TMC2225                     16     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
-#define TMC2209                     17     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
-#define TMC2226                     17     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
-#define STEP_DIR_DRIVER_LAST        17
-
-// driver (step/dir) decay mode
-#define DRIVER_DECAY_MODE_FIRST     1
-#define MIXED                       2
-#define FAST                        3
-#define SLOW                        4
-#define SPREADCYCLE                 5
-#define STEALTHCHOP                 6
-#define DRIVER_DECAY_MODE_LAST      6
+#define TMC2226S                    12     // allows M0,M1    bit patterens for 8x,16x,32x,64x (M2 sets spreadCycle/stealthChop, uses 256x intpol)
+#define TMC_DRIVER_FIRST            13
+#define TMC2130                     13     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
+#define TMC2160                     14     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
+#define TMC2660                     15     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
+#define TMC5160                     16     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
+#define TMC5161                     17     // uses TMC software SPI comms   for 1x,2x...,256x  (SPI sets spreadCycle/stealthChop etc.)
+#define TMC_UART_DRIVER_FIRST       18
+#define TMC2208                     18     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
+#define TMC2225                     19     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
+#define TMC2209                     20     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
+#define TMC2226                     21     // uses TMC software UART comms  for 1x,2x...,256x  (UART sets spreadCycle/stealthChop etc, dedicated RX/TX UART to each driver using index 0)
+#define STEP_DIR_DRIVER_LAST        21
 
 // servo driver (usually for DC motors equipped with encoders)
 // changes here must be reflected in the ServoDriver.cpp file, etc.
@@ -85,12 +84,25 @@
 #define SERVO_TMC5160_DC            103    // TMC5160 DC motor control
 #define SERVO_TMC2209               104    // TMC2209 stepper driver using VACTUAL velocity control
 #define SERVO_TMC5160               105    // TMC5160 stepper driver using VMAX velocity control
-#define SERVO_DRIVER_LAST           105
+#define SERVO_KTECH                 106    // KTech servo motor using velocity control
+#define SERVO_DRIVER_LAST           106
 
-// odrive driver
-#define ODRIVE_DRIVER_FIRST         200
-#define ODRIVE                      200    // First generation ODrive (axis 1 and 2 only)
-#define ODRIVE_DRIVER_LAST          200
+// integrated motor drivers
+#define MOTOR_DRIVER_FIRST          200
+#define ODRIVE                      200    // First generation ODrive (axis 1 and 2 only), EXPERIMENTAL!
+#define KTECH                       201    // KTech CAN driver
+#define MKS42D                      202    // MKS SERVO 42D, EXPERIMENTAL!
+#define MKS57D                      202    // MKS SERVO 57D, EXPERIMENTAL!
+#define MOTOR_DRIVER_LAST           202
+
+// driver (step/dir) decay mode
+#define DRIVER_DECAY_MODE_FIRST     1
+#define MIXED                       1
+#define FAST                        2
+#define SLOW                        3
+#define SPREADCYCLE                 4
+#define STEALTHCHOP                 5
+#define DRIVER_DECAY_MODE_LAST      6
 
 // servo encoder (must match Encoder library)
 #define ENC_FIRST                   1
@@ -103,8 +115,10 @@
 #define AS37_H39B_B                 7      // Broadcom AS37-H39B-B BISS-C interface encoder
 #define JTW_24BIT                   8      // JTW Trident BISS-C interface 24bit encoder
 #define JTW_26BIT                   9      // JTW Trident BISS-C interface 26bit encoder
-#define SERIAL_BRIDGE               10     // serial bridge to encoders
-#define ENC_LAST                    10
+#define LIKA_ASC85                  10     // Lika ASC85 BISS-C interface 25bit encoder (experimental)
+#define KTECH_IME                   11     // KTech in motor encoder
+#define SERIAL_BRIDGE               12     // serial bridge to encoders
+#define ENC_LAST                    12
 
 // encoder filter types
 #define ENC_FILT_FIRST              1
@@ -116,8 +130,9 @@
 
 // servo feedback (must match Encoder library)
 #define SERVO_FEEDBACK_FIRST        1
-#define FB_PID                      1      // PID feedback
-#define SERVO_FEEDBACK_LAST         1
+#define PID                         1      // PID feedback
+#define DUAL_PID                    2      // Dual PID feedback
+#define SERVO_FEEDBACK_LAST         2
 
 // driver (step/dir) and servo, misc.
 #define ODRIVER                     -10    // general purpose flag for a ODRIVE driver motor
@@ -138,8 +153,9 @@
 #define NV_24128                    7  // 16KB I2C EEPROM AT DEFAULT ADDRESS 0x50
 #define NV_24256                    8  // 32KB I2C EEPROM AT DEFAULT ADDRESS 0x50
 #define NV_AT24C32                  9  // 4KB I2C EEPROM AT DEFAULT ADDRESS 0x57 (ZS042 module for instance)
-#define NV_MB85RC64                10  // 8KB I2C FRAM AT DEFAULT ADDRESS 0x50
-#define NV_MB85RC256               11  // 32KB I2C FRAM AT DEFAULT ADDRESS 0x50
+#define NV_MB85RC32                10  // 4KB I2C FRAM AT DEFAULT ADDRESS 0x50
+#define NV_MB85RC64                11  // 8KB I2C FRAM AT DEFAULT ADDRESS 0x50
+#define NV_MB85RC256               12  // 32KB I2C FRAM AT DEFAULT ADDRESS 0x50
 
 #define NVE_LOW                     0   // low (< 100K writes)
 #define NVE_MID                     1   // mid (~ 100K writes)
@@ -153,10 +169,11 @@
 #define MCP23008                    2      // MCP23008 8-channel GPIO
 #define MCP23017                    3      // MCP23017 16-channel GPIO
 #define X9555                       4      // TCA/PCA9555 16-channel GPIO
-#define X8575                       5      // PCF8575 16-channel GPIO
-#define SWS                         6      // Smart Web Server 8-channel GPIO (usually on the four Encoder pins, if otherwise unused)
-#define SSR74HC595                  7      // 74HC595 8,16,24,32-channel GPIO (serial shift register, output only)
-#define GPIO_LAST                   7
+#define X8574                       5      // PCF8574 8-channel GPIO (up to 4)
+#define X8575                       6      // PCF8575 16-channel GPIO
+#define SWS                         7      // Smart Web Server 8-channel GPIO (usually on the four Encoder pins, if otherwise unused)
+#define SSR74HC595                  8      // 74HC595 8,16,24,32-channel GPIO (serial shift register, output only)
+#define GPIO_LAST                   8
 
 // angular
 #define RAD_DEG_RATIO               57.29577951308232L

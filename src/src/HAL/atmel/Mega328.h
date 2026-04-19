@@ -34,9 +34,11 @@
 
 // New symbol for the default I2C port -------------------------------------------------------------
 #include <Wire.h>
-#define HAL_WIRE Wire
+#ifndef HAL_WIRE
+  #define HAL_WIRE Wire
+#endif
 #ifndef HAL_WIRE_CLOCK
-  #define HAL_WIRE_CLOCK 20000
+  #define HAL_WIRE_CLOCK 100000
 #endif
 
 // Non-volatile storage ----------------------------------------------------------------------------
@@ -54,10 +56,8 @@
 
 #define HAL_INIT() { \
   analogReference(DEFAULT); \
+  HAL_FAST_TICKS_INIT(); \
 }
 
 //---------------------------------------------------------------------------------------------------
 // Misc. includes to support this processor's operation
-
-// stand-in for delayNanoseconds()
-#define delayNanoseconds(ns) delayMicroseconds(ceilf(ns/1000.0F))

@@ -10,87 +10,65 @@
 
 #ifdef SERVO_MOTOR_PRESENT
 
-#ifndef ANALOG_WRITE_RANGE
-  #define ANALOG_WRITE_RANGE 255
-#endif
-#ifndef SERVO_ANALOG_WRITE_RANGE
-  #define SERVO_ANALOG_WRITE_RANGE ANALOG_WRITE_RANGE
-#endif
+typedef struct ServoPins {
+  int16_t ph1; // step
+  int16_t ph1State;
+  int16_t ph2; // dir
+  int16_t ph2State;
+  int16_t enable;
+  uint8_t enabledState;
+  int16_t m0;
+  int16_t m1;
+  int16_t m2;
+  int16_t m3;
+  int16_t fault;
+} ServoPins;
 
-#ifndef AXIS1_SERVO_VELOCITY_FACTOR
-  #define AXIS1_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS2_SERVO_VELOCITY_FACTOR
-  #define AXIS2_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS3_SERVO_VELOCITY_FACTOR
-  #define AXIS3_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS4_SERVO_VELOCITY_FACTOR
-  #define AXIS4_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS5_SERVO_VELOCITY_FACTOR
-  #define AXIS5_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS6_SERVO_VELOCITY_FACTOR
-  #define AXIS6_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS7_SERVO_VELOCITY_FACTOR
-  #define AXIS7_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS8_SERVO_VELOCITY_FACTOR
-  #define AXIS8_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-#ifndef AXIS9_SERVO_VELOCITY_FACTOR
-  #define AXIS9_SERVO_VELOCITY_FACTOR 0.0F
-#endif
-
-#ifndef AXIS1_SERVO_VELOCITY_SCALE
-  #define AXIS1_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS2_SERVO_VELOCITY_SCALE
-  #define AXIS2_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS3_SERVO_VELOCITY_SCALE
-  #define AXIS3_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS4_SERVO_VELOCITY_SCALE
-  #define AXIS4_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS5_SERVO_VELOCITY_SCALE
-  #define AXIS5_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS6_SERVO_VELOCITY_SCALE
-  #define AXIS6_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS7_SERVO_VELOCITY_SCALE
-  #define AXIS7_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS8_SERVO_VELOCITY_SCALE
-  #define AXIS8_SERVO_VELOCITY_SCALE 1.0F
-#endif
-#ifndef AXIS9_SERVO_VELOCITY_SCALE
-  #define AXIS9_SERVO_VELOCITY_SCALE 1.0F
-#endif
+typedef struct ServoSettings {
+  int16_t model;
+  int8_t  status;
+  int32_t acceleration;  // acceleration in encoder %/s/s
+} ServoSettings;
 
 class ServoDriver {
   public:
+    ServoDriver(uint8_t axisNumber, const ServoPins *Pins, const ServoSettings *Settings);
+
     // decodes driver model and sets up the pin modes
-    virtual void init();
+    virtual bool init(bool reverse);
+
+    // returns the number of axis parameters
+    virtual uint8_t getParameterCount() { return numParameters; }
+
+    // returns the specified axis parameter
+    virtual AxisParameter* getParameter(uint8_t number) { if (number > numParameters) return &invalid; else return parameter[number]; }
+
+    // check if axis parameter is valid
+    virtual bool parameterIsValid(AxisParameter* parameter, bool next = false) { return true; }
 
     // alternate mode for movement
     virtual void alternateMode(bool state) { UNUSED(state); }
 
     // enable or disable the driver using the enable pin or other method
-    virtual void enable(bool state) { UNUSED(state); }
+    virtual void enable(bool state);
 
-    // get the control range to the motor (-velocityMax to velocityMax) defaults to ANALOG_WRITE_RANGE
-    // must be ready at object creation!
-    virtual float getMotorControlRange() { return velocityMax; }
+    // sets frequency corrosponding to the fastest allowed slew rate
+    // \param frequency: rate of motion in steps (counts) per second
+    void setFrequencyMax(float frequency);
 
-    // set motor velocity, returns velocity actually set
+    // set motor velocity
+    // \param velocity as needed to reach the target position, in signed encoder counts per second
     virtual float setMotorVelocity(float velocity);
 
+    // set motor velocity
+    // \param velocity as needed to reach the target position, in signed encoder counts per second
+    // \param encoderVelocity in signed encoder counts per second
+    // \returns velocity in effect, in signed encoder counts per second
+    virtual float setMotorVelocity(float velocity, float encoderVelocity) {
+      UNUSED(encoderVelocity);
+      return setMotorVelocity(velocity);
+    }
+    
     // returns motor direction (DIR_FORWARD or DIR_REVERSE)
     Direction getMotorDirection() { return motorDirection; };
 
@@ -101,48 +79,24 @@ class ServoDriver {
     // get status info.
     // this is a required method for the Axis class
     DriverStatus getStatus() { return status; }
-   
+
+    // do not use acceleration while trackings
+    void setBypassAccelOnTracking(bool on) { bypassAccelOnTracking = on; }
+
     // calibrate the motor if required
     virtual void calibrateDriver() {}
 
-    // return the velocity estimate
-    virtual float getVelocityEstimate(float frequency) {
-      UNUSED(frequency);
-      switch (axisNumber) {
-        case 1: return AXIS1_SERVO_VELOCITY_FACTOR;
-        case 2: return AXIS2_SERVO_VELOCITY_FACTOR;
-        case 3: return AXIS3_SERVO_VELOCITY_FACTOR;
-        case 4: return AXIS4_SERVO_VELOCITY_FACTOR;
-        case 5: return AXIS5_SERVO_VELOCITY_FACTOR;
-        case 6: return AXIS6_SERVO_VELOCITY_FACTOR;
-        case 7: return AXIS7_SERVO_VELOCITY_FACTOR;
-        case 8: return AXIS8_SERVO_VELOCITY_FACTOR;
-        case 9: return AXIS9_SERVO_VELOCITY_FACTOR;
-        default: return 0;
-      }
-    }
-
-    // return the velocity scale factor
-    virtual float getVelocityScale() {
-      switch (axisNumber) {
-        case 1: return AXIS1_SERVO_VELOCITY_SCALE;
-        case 2: return AXIS2_SERVO_VELOCITY_SCALE;
-        case 3: return AXIS3_SERVO_VELOCITY_SCALE;
-        case 4: return AXIS4_SERVO_VELOCITY_SCALE;
-        case 5: return AXIS5_SERVO_VELOCITY_SCALE;
-        case 6: return AXIS6_SERVO_VELOCITY_SCALE;
-        case 7: return AXIS7_SERVO_VELOCITY_SCALE;
-        case 8: return AXIS8_SERVO_VELOCITY_SCALE;
-        case 9: return AXIS9_SERVO_VELOCITY_SCALE;
-        default: return 0;
-      }
-    }
+    // get the driver name
+    virtual const char* name() { return NULL; }
 
   protected:
-    int axisNumber;
+    virtual void readStatus() {}
 
-    char axisPrefix[36]; // prefix for debug messages
-    char axisPrefixWarn[36]; // additional prefix for debug messages
+    int axisNumber;
+    char axisPrefix[32]; // prefix for debug messages
+
+    int16_t driverModel;
+    int16_t statusMode;
 
     DriverStatus status = { false, {false, false}, {false, false}, false, false, false, false };
     #if DEBUG != OFF
@@ -150,17 +104,32 @@ class ServoDriver {
     #endif
     unsigned long timeLastStatusUpdate = 0;
 
-    int16_t model = OFF;
-    int16_t statusMode = OFF;
-
-    float velocityMax = SERVO_ANALOG_WRITE_RANGE;
+    float normalizedAcceleration; // in encoder counts/s/s
+    float accelerationFs;         // in encoder counts/s/fs
+    float velocityRamp = 1.0F;    // regulate velocity changes
+    float velocityMax = 1.0F;     // frequency corrosponding to the fastest allowed slew rate, in encoder counts/s
+    float InvVelocityMax = 1.0F;
 
     Direction motorDirection = DIR_FORWARD;
+    bool reversed = false;
 
     int16_t enablePin = OFF;
     uint8_t enabledState = LOW;
     bool enabled = false;
     int16_t faultPin = OFF;
+    bool bypassAccelOnTracking = false;
+
+    const ServoPins *Pins;
+    const ServoSettings *Settings;
+
+    // runtime adjustable settings
+    AxisParameter invalid = {NAN, NAN, NAN, NAN, NAN, AXP_INVALID, ""};
+    AxisParameter acceleration = {NAN, NAN, NAN, 0, 100000, AXP_FLOAT, AXPN_MAX_ACCEL};
+    AxisParameter zeroDeadband = {NAN, NAN, NAN, 0.0, 500.0, AXP_FLOAT_IMMEDIATE, "Deadband, cps"};
+
+    // this array list isn't used if overridden, just a place holder!
+    const int numParameters = 2;
+    AxisParameter* parameter[3] = {&invalid, &acceleration, &zeroDeadband};
 };
 
 #endif
